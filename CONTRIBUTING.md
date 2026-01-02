@@ -123,22 +123,43 @@ One-paragraph summary of the key takeaway.
 
 ## Pull Request Process
 
-1. **Fork** the repository
-2. **Create a branch** for your changes:
+1. **Fork** the repository at [https://github.com/shahshrey/langgraph-interview-questions](https://github.com/shahshrey/langgraph-interview-questions)
+2. **Clone** your fork:
+   ```bash
+   git clone https://github.com/YOUR-USERNAME/langgraph-interview-questions.git
+   cd langgraph-interview-questions
+   ```
+3. **Create a branch** for your changes:
    ```bash
    git checkout -b feature/add-question-73
+   # or
+   git checkout -b fix/q15-code-example
    ```
-3. **Make your changes** following the style guidelines
-4. **Test** any code examples you add
-5. **Commit** with clear messages:
+4. **Make your changes** following the style guidelines
+5. **Test** any code examples you add
+6. **Commit** with clear messages:
    ```bash
    git commit -m "Add Q73: How to implement custom checkpointing"
    ```
-6. **Push** to your fork
-7. **Open a Pull Request** with:
+7. **Push** to your fork:
+   ```bash
+   git push origin feature/add-question-73
+   ```
+8. **Open a Pull Request** on GitHub with:
    - Clear title describing the change
    - Description of what was added/changed
-   - Any relevant issue numbers
+   - Any relevant issue numbers (e.g., "Fixes #42")
+
+### For New Questions
+
+When adding a new question, you should:
+1. Add it to `answers/langgraph-study-guide.md` following the format
+2. Run the split script to generate individual files:
+   ```bash
+   python3 scripts/split_questions.py
+   ```
+3. Update links in `README.md` if needed
+4. Commit all changes together
 
 ---
 

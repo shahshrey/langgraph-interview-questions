@@ -33,4 +33,9 @@ Total questions: **22**
 
 ---
 
-[← Back to All Questions](../README.md)
+## 🏠 Navigation
+
+- [← Back to Questions Index](../README.md)
+- [← Back to Main README](../../README.md)
+- [🟢 Easy Questions](../basics/README.md)
+- [🟡 Medium Questions](../intermediate/README.md)
