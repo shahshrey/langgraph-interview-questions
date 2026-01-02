@@ -62,7 +62,7 @@ System design, production patterns, and optimization.
 ## 📖 Full Study Guide
 
 For the complete study guide with all questions in one document, see:
-- [Complete Study Guide](../answers/langgraph-study-guide.md) (6,383 lines, all 72 questions)
+- [Complete Study Guide](../full-guide/langgraph-study-guide.md) (6,383 lines, all 72 questions)
 
 ## 🏠 Navigation
 

@@ -153,7 +153,7 @@ One-paragraph summary of the key takeaway.
 ### For New Questions
 
 When adding a new question, you should:
-1. Add it to `answers/langgraph-study-guide.md` following the format
+1. Add it to `full-guide/langgraph-study-guide.md` following the format
 2. Run the split script to generate individual files:
    ```bash
    python3 scripts/split_questions.py

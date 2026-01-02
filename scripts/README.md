@@ -14,7 +14,7 @@ python3 scripts/split_questions.py
 
 ### What it does
 
-1. Reads `answers/langgraph-study-guide.md`
+1. Reads `full-guide/langgraph-study-guide.md`
 2. Extracts all 72 questions
 3. Creates individual `.md` files in:
    - `questions/basics/` for easy questions

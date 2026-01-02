@@ -29,7 +29,7 @@ A comprehensive collection of **72 interview questions** covering LangGraph — 
 - **[🟢 Easy Questions](questions/basics/)** - Start here if you're new to LangGraph
 - **[🟡 Medium Questions](questions/intermediate/)** - Dive deeper into implementation
 - **[🔴 Hard Questions](questions/advanced/)** - Master production patterns
-- **[📚 Complete Study Guide](answers/langgraph-study-guide.md)** - All questions in one file (6,383 lines)
+- **[📚 Complete Study Guide](full-guide/langgraph-study-guide.md)** - All questions in one file
 
 ### Browse by Difficulty
 
