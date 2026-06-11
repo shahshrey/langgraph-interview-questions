@@ -60,12 +60,13 @@ checkpointer = InMemorySaver()
 graph = workflow.compile(checkpointer=checkpointer)
 ```
 
-For Redis:
+For Redis (requires the `langgraph-checkpoint-redis` package):
 ```python
 from langgraph.checkpoint.redis import RedisSaver
 
-checkpointer = RedisSaver(redis_url="redis://localhost:6379/0")
-graph = workflow.compile(checkpointer=checkpointer)
+with RedisSaver.from_conn_string("redis://localhost:6379/0") as checkpointer:
+    checkpointer.setup()  # create indices on first use
+    graph = workflow.compile(checkpointer=checkpointer)
 ```
 
 #### **3. Run and Persist State by Thread**

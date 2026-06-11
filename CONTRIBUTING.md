@@ -153,11 +153,8 @@ One-paragraph summary of the key takeaway.
 ### For New Questions
 
 When adding a new question, you should:
-1. Add it to `full-guide/langgraph-study-guide.md` following the format
-2. Run the split script to generate individual files:
-   ```bash
-   python3 scripts/split_questions.py
-   ```
+1. Create the individual question file under `questions/<difficulty>/` following the format
+2. Add the same content to `full-guide/langgraph-study-guide.md`
 3. Update links in `README.md` if needed
 4. Commit all changes together
 

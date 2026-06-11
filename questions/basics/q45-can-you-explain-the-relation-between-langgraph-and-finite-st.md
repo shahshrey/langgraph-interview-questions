@@ -15,18 +15,23 @@
 
 **Code Example:**
 ```python
-from langgraph.graph import StateGraph, State
+from typing_extensions import TypedDict
+from langgraph.graph import StateGraph, START, END
 
-class MyState(State):
+class MyState(TypedDict):
     # Define state variables here
-    pass
+    status: str
 
-graph = StateGraph(MyState)
-graph.add_node("start", start_function)
-graph.add_node("process", process_function)
-graph.add_edge("start", "process", condition=some_condition)
+builder = StateGraph(MyState)
+builder.add_node("start_step", start_function)
+builder.add_node("process", process_function)
+builder.add_edge(START, "start_step")
+# Conditional transition: the router inspects state and picks the next node
+builder.add_conditional_edges("start_step", route_condition, ["process", END])
+builder.add_edge("process", END)
+graph = builder.compile()
 ```
-In this example, each node is a state, and `add_edge` defines possible transitions, just like in an FSM.
+In this example, each node is a state, and `add_edge` / `add_conditional_edges` define possible transitions, just like in an FSM.
 
 **Best Practices:**
 - **Explicit State Management:** Clearly define all possible states and transitions to avoid unexpected behavior.

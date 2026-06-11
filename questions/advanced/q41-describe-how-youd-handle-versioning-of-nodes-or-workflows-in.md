@@ -22,6 +22,7 @@ Managing versioning in LangGraph—whether for individual nodes (agents, tools, 
   - Use separate environments (e.g., staging, production) to test updates to nodes or workflows.
   - Roll out changes incrementally using feature flags or canary deployments to minimize risk.
   - Maintain a clear version history of workflow definitions, ideally in a source control system (like Git), to enable rollbacks and audits.
+  - When deploying on LangGraph Server (LangSmith Deployment), **assistants** are versioned automatically: every configuration update to an assistant creates a new version that you can pin, compare, or roll back to.
 
 ---
 

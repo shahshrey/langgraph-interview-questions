@@ -2,7 +2,7 @@
 
 **Difficulty:** easy | **Tags:** basics, comparison
 
-**LangGraph** is a framework built on top of LangChain, designed to simplify the creation of complex, stateful, and often non-linear AI workflows. While both are part of the LangChain ecosystem and help developers build applications powered by large language models (LLMs), they serve different purposes and have distinct approaches.
+**LangGraph** is a low-level orchestration framework from the LangChain ecosystem, designed to simplify the creation of complex, stateful, and often non-linear AI workflows. It integrates seamlessly with LangChain components (and in fact LangChain 1.x's `create_agent` is built on top of LangGraph), but it can also be used standalone. While both help developers build applications powered by large language models (LLMs), they serve different purposes and have distinct approaches.
 
 ---
 
@@ -15,11 +15,11 @@
   - Passes information between steps but does not inherently maintain persistent state across runs.
 
 - **LangGraph**:
-  - Built as a specialized extension of LangChain, introducing a graph-based (state machine) architecture.
+  - A graph-based (state machine) orchestration runtime that works hand-in-hand with LangChain components.
   - Designed for stateful, complex, and non-linear workflows, such as multi-agent systems or applications with branching, loops, and retries.
   - Each node in the graph represents an action (e.g., LLM call, database query), and edges define transitions based on outcomes.
-  - Robust state management is a core feature, allowing nodes to access and modify shared state for context-aware behaviors.
-  - Often provides a visual, low-code interface for designing workflows, making it more accessible for users who prefer graphical design.
+  - Robust state management is a core feature, allowing nodes to access and update shared state for context-aware behaviors.
+  - Code-first by design; LangGraph Studio (a visualization and debugging IDE) and built-in Mermaid diagram export help you inspect and debug graphs, but workflows are authored in code, not via a low-code editor.
 
 ---
 
@@ -27,26 +27,35 @@
 
 **LangChain (linear workflow):**
 ```python
-from langchain.chains import SimpleChain
+from langchain.chat_models import init_chat_model
+from langchain_core.prompts import ChatPromptTemplate
 
-chain = SimpleChain([
-    step1,  # e.g., LLM call
-    step2,  # e.g., data retrieval
-    step3   # e.g., summarization
-])
-result = chain.run(input_data)
+model = init_chat_model("openai:gpt-4o-mini")
+prompt = ChatPromptTemplate.from_template("Summarize this text: {text}")
+
+chain = prompt | model  # simple, linear pipeline
+result = chain.invoke({"text": input_text})
 ```
 
 **LangGraph (graph-based workflow):**
 ```python
-from langgraph import Graph, Node
+from typing_extensions import TypedDict
+from langgraph.graph import StateGraph, START, END
 
-graph = Graph()
-graph.add_node(Node("start", start_action))
-graph.add_node(Node("decision", decision_action))
-graph.add_edge("start", "decision", condition=some_condition)
-graph.add_edge("decision", "end", condition=another_condition)
-result = graph.run(initial_state)
+class State(TypedDict):
+    input: str
+    decision: str
+    output: str
+
+builder = StateGraph(State)
+builder.add_node("start_step", start_action)
+builder.add_node("decision_step", decision_action)
+builder.add_edge(START, "start_step")
+builder.add_conditional_edges("start_step", route, ["decision_step", END])
+builder.add_edge("decision_step", END)
+
+graph = builder.compile()
+result = graph.invoke({"input": "hello"})
 ```
 
 ---
@@ -71,7 +80,7 @@ result = graph.run(initial_state)
 
 - [LangChain vs. LangGraph: A Comparative Analysis (Medium)](https://medium.com/@tahirbalarabe2/%EF%B8%8Flangchain-vs-langgraph-a-comparative-analysis-ce7749a80d9c)
 - [LangChain vs. LangGraph: Comparing AI Agent Frameworks (Oxylabs)](https://oxylabs.io/blog/langgraph-vs-langchain)
-- [LangGraph - LangChain Official Docs](https://www.langchain.com/langgraph)
+- [LangGraph - Official Docs](https://docs.langchain.com/oss/python/langgraph/overview)
 
 ---
 

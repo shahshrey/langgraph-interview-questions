@@ -21,8 +21,9 @@
   - **Best for**: Predictable, repeatable processes where the logic does not need to adapt to changing input or context.
 
 - **Dynamic Graphs**
-  - The workflow can change at runtime based on the current state or outputs.
-  - The next node is chosen dynamically, often using logic or even an LLM (Language Model) to decide what to do next.
+  - The workflow's *path* can change at runtime based on the current state or outputs (the set of nodes is still declared up front; what's dynamic is routing and fan-out).
+  - The next node is chosen dynamically via **conditional edges** (a router function), by returning a **`Command(goto=...)`** from a node, or by fanning out to a runtime-determined number of parallel node invocations with the **`Send` API** (map-reduce).
+  - Often the routing logic uses an LLM to decide what to do next.
   - Example: An agent that decides which tool to use or which branch to follow based on the user's query or intermediate results.
   - **Best for**: Agentic workflows, complex decision-making, or when the process must adapt to new information.
 
@@ -32,29 +33,51 @@
 
 *Static Graph Example:*
 ```python
-from langgraph import StateGraph
+from langgraph.graph import StateGraph, START, END
 
-graph = StateGraph()
-graph.add_node("step1", step1_function)
-graph.add_node("step2", step2_function)
-graph.add_edge("step1", "step2")
-graph.set_entry_point("step1")
+builder = StateGraph(State)
+builder.add_node("step1", step1_function)
+builder.add_node("step2", step2_function)
+builder.add_edge(START, "step1")
+builder.add_edge("step1", "step2")
+builder.add_edge("step2", END)
+graph = builder.compile()
 ```
 *This graph always runs step1, then step2.*
 
-*Dynamic Graph Example:*
+*Dynamic Routing Example (conditional edges):*
 ```python
 def dynamic_router(state):
     if state["needs_review"]:
         return "human_review"
-    else:
-        return "send_reply"
+    return "send_reply"
 
-graph.add_node("router", dynamic_router)
-graph.add_edge("router", "human_review")
-graph.add_edge("router", "send_reply")
+builder.add_conditional_edges("draft", dynamic_router, ["human_review", "send_reply"])
 ```
 *Here, the next step is chosen at runtime based on the state.*
+
+*Dynamic Routing Example (`Command`):*
+```python
+from typing import Literal
+from langgraph.types import Command
+
+def draft(state) -> Command[Literal["human_review", "send_reply"]]:
+    # update state AND choose the next node in one step
+    target = "human_review" if state["needs_review"] else "send_reply"
+    return Command(update={"draft": ...}, goto=target)
+```
+
+*Dynamic Fan-Out Example (`Send` API):*
+```python
+from langgraph.types import Send
+
+def fan_out(state):
+    # spawn one "process_item" node invocation per item, in parallel —
+    # the number of branches is decided at runtime (map-reduce)
+    return [Send("process_item", {"item": i}) for i in state["items"]]
+
+builder.add_conditional_edges("plan", fan_out, ["process_item"])
+```
 
 ---
 

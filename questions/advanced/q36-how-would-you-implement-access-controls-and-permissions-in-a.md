@@ -13,17 +13,21 @@
 
 #### 1. **Authentication Integration**
 
-LangGraph supports custom authentication, allowing you to:
+When deployed via LangGraph Server (LangSmith Deployment or self-hosted), LangGraph supports custom authentication through the `Auth` object from `langgraph_sdk`, allowing you to:
 - Integrate with your own auth providers (OAuth2, JWT, Supabase, etc.).
 - Validate credentials at the entry point of your workflow.
 - Scope conversations and resources to specific users for privacy.
 
 **Example:**
 ```python
+from langgraph_sdk import Auth
+
+auth = Auth()
+
 @auth.authenticate
-def authenticate_user(request):
-    # Validate token or credentials
-    return user_id
+async def authenticate_user(headers: dict):
+    # Validate token or credentials, raise on failure
+    return {"identity": user_id}
 ```
 - This handler ensures only authenticated users can proceed in the workflow.
 
@@ -36,13 +40,14 @@ def authenticate_user(request):
 
 **Example:**
 ```python
-@auth.on("resource_access")
-def authorize(user, resource, action):
-    if user.role == "admin" or resource.owner == user.id:
-        return True
-    return False
+@auth.on
+async def authorize(ctx: Auth.types.AuthContext, value: dict):
+    # Tag resources with their owner and filter reads to the owner
+    filters = {"owner": ctx.user.identity}
+    value.setdefault("metadata", {}).update(filters)
+    return filters
 ```
-- This ensures only authorized users can access or modify certain resources.
+- Scoped handlers like `@auth.on.threads.create` or `@auth.on.assistants` let you apply different rules per resource and action, ensuring only authorized users can access or modify certain resources.
 
 ---
 
@@ -53,8 +58,10 @@ def authorize(user, resource, action):
 
 **Example (Python):**
 ```python
-workflow.add_node("authorization", authorize)
-workflow.add_conditional_edges("agent", should_continue, ["authorization", "tools", "END"])
+from langgraph.graph import END
+
+builder.add_node("authorization", authorize_node)
+builder.add_conditional_edges("agent", should_continue, ["authorization", "tools", END])
 ```
 - This pattern allows you to pause, check permissions, and branch the workflow accordingly.
 
@@ -98,6 +105,7 @@ workflow.add_conditional_edges("agent", should_continue, ["authorization", "tool
 ---
 
 **References:**
+- [Custom Authentication Docs (LangSmith Deployment)](https://docs.langchain.com/langgraph-platform/custom-auth)
 - [LangGraph Custom Authentication & Access Control](https://changelog.langchain.com/announcements/custom-authentication-access-control-for-langgraph-platform)
 - [Resource Level Authorization to LangGraph Agent (Medium)](https://medium.com/fundamentals-of-artificial-intelligence/resource-level-authorization-to-langgraph-agent-f964056c8a6c)
 - [Permit.io Blog: Delegating AI Permissions](https://www.permit.io/blog/delegating-ai-permissions-to-human-users-with-permitios-access-request-mcp)

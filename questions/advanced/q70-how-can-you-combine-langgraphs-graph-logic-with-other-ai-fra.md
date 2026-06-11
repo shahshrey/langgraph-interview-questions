@@ -8,7 +8,7 @@
 
 ### Key Concepts
 
-- **LangGraph** is a graph-based orchestration framework built on top of LangChain, designed for modeling complex, multi-agent, and cyclical workflows.
+- **LangGraph** is a graph-based orchestration framework from the LangChain ecosystem, designed for modeling complex, multi-agent, and cyclical workflows.
 - **Hybrid agents** combine reactive (fast, event-driven) and deliberative (planning, reasoning) behaviors, often requiring integration of multiple AI frameworks and tools.
 - **Integration** with other frameworks (e.g., LangChain, OpenAI API, Pinecone, CrewAI, n8n) enables hybrid agents to leverage the strengths of each system.
 
@@ -37,25 +37,27 @@
 - **Layered Architecture:** Use LangGraph for high-level reasoning and state management, while delegating specialized tasks to other frameworks.
 
 #### 4. **Example Integration Stack**
-```python
-# Example: Integrating LangGraph with LangChain, OpenAI, and Pinecone
-pip install langgraph langchain openai pinecone-client fastapi
+```bash
+# Example stack: LangGraph with LangChain, OpenAI, and Pinecone
+pip install langgraph langchain langchain-openai pinecone fastapi
+```
 
+```python
 # In your LangGraph node logic:
-from langchain.llms import OpenAI
-from pinecone import PineconeClient
+from langchain.chat_models import init_chat_model
+from pinecone import Pinecone
+
+llm = init_chat_model("openai:gpt-4o-mini")
+pc = Pinecone(api_key="...")
+index = pc.Index("my-index")
 
 def node_logic(state):
-    # Use OpenAI for LLM tasks
-    llm = OpenAI(api_key="...")
-    response = llm("Summarize: " + state["input"])
+    # Use an LLM for summarization
+    response = llm.invoke("Summarize: " + state["input"])
     # Use Pinecone for vector search
-    pc = PineconeClient(api_key="...")
-    results = pc.query(response)
-    # Update state
-    state["summary"] = response
-    state["search_results"] = results
-    return state
+    results = index.query(vector=embed(response.content), top_k=5)
+    # Return a partial state update (do not mutate state)
+    return {"summary": response.content, "search_results": results}
 ```
 
 ---

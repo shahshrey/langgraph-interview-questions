@@ -18,19 +18,24 @@ LangGraph is designed to orchestrate complex, stateful AI workflows, and a key f
 
 ### **How to Integrate External Tools**
 
-1. **Define the Tool**: Create a function or class that wraps the external tool or API you want to use.
+1. **Define the Tool**: Create a function that wraps the external tool or API you want to use, decorated with `@tool`.
    ```python
+   from langchain_core.tools import tool
+
+   @tool
    def get_weather(city: str) -> str:
+       """Get the current weather for a city."""
        # Call a weather API and return the result
        ...
    ```
 
-2. **Bind the Tool to a Node**: Use LangGraph’s `ToolNode` or bind the tool to an LLM node.
+2. **Bind the Tool to a Node**: Use LangGraph’s prebuilt `ToolNode` to execute tool calls, and bind the tools to your LLM so it can request them.
    ```python
-   from langgraph.graph import ToolNode
+   from langgraph.prebuilt import ToolNode
 
    tools = [get_weather]
-   tool_node = ToolNode(tools=tools)
+   tool_node = ToolNode(tools)
+   llm_with_tools = llm.bind_tools(tools)
    ```
 
 3. **Add the Tool Node to the Workflow**: Insert the tool node into your state graph, connecting it to other nodes (like your chatbot or reasoning node).

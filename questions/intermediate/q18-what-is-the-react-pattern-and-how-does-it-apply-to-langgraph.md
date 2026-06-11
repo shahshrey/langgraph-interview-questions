@@ -9,7 +9,7 @@
 ### **Key Concepts**
 
 - **ReAct Pattern**: Stands for "Reasoning and Acting." It is an agent design pattern where an AI system alternates between reasoning (thinking about the next step) and acting (executing a tool or function), often in a loop, to solve complex tasks.
-- **LangGraph**: A framework built on top of LangChain that lets you define agent workflows as graphs, where nodes represent steps (reasoning or action) and edges define the flow between them.
+- **LangGraph**: A framework from the LangChain ecosystem that lets you define agent workflows as graphs, where nodes represent steps (reasoning or action) and edges define the flow between them.
 
 ---
 
@@ -22,33 +22,30 @@
 
 ---
 
-### **Code Example (Simplified Pseudocode)**
+### **Code Example**
+
+The current recommended way to get a ReAct-style agent is `create_agent` from LangChain (it replaces the now-deprecated `create_react_agent` from `langgraph.prebuilt`) and returns a compiled LangGraph graph:
 
 ```python
-# Pseudocode for a ReAct agent in LangGraph
+from langchain.agents import create_agent
+from langchain_core.tools import tool
 
-# Define nodes
-def reasoning_node(state):
-    # Use LLM to decide next action
-    return next_action
+@tool
+def search(query: str) -> str:
+    """Search the web for information."""
+    ...
 
-def action_node(state, action):
-    # Execute tool or function
-    return new_state
+agent = create_agent(
+    model="anthropic:claude-sonnet-4-5",
+    tools=[search],
+)
 
-# Define graph
-graph = {
-    "reasoning": reasoning_node,
-    "action": action_node,
-    # Edges define flow: reasoning -> action -> reasoning (loop)
-}
-
-# Run agent
-state = initial_state
-while not done:
-    action = graph["reasoning"](state)
-    state = graph["action"](state, action)
+result = agent.invoke(
+    {"messages": [{"role": "user", "content": "What is LangGraph?"}]}
+)
 ```
+
+You can also build the ReAct loop by hand with `StateGraph`: an LLM node that reasons and emits tool calls, a `ToolNode` (from `langgraph.prebuilt`) that executes them, and a conditional edge (e.g., `tools_condition`) that loops back to the LLM until no more tool calls are made.
 
 ---
 

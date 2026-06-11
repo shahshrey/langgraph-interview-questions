@@ -21,6 +21,10 @@ LangGraph is designed to build modular, agentic workflows for LLM applications, 
 Create a shared state object to hold the user query, retrieved documents, and generated answers. This state is passed between nodes.
 
 ```python
+from typing import List
+from typing_extensions import TypedDict
+from langchain_core.documents import Document
+
 class GraphState(TypedDict):
     question: str
     documents: List[Document]
@@ -38,22 +42,26 @@ Example node for retrieval:
 ```python
 def retrieve(state):
     question = state["question"]
-    documents = retriever.get_relevant_documents(question)
-    return {"documents": documents, "question": question}
+    documents = retriever.invoke(question)
+    return {"documents": documents}
 ```
 
 #### 3. **Build the Workflow Graph**
 Use LangGraph’s `StateGraph` to define nodes and transitions.
 
 ```python
-from langgraph.graph import StateGraph
+from langgraph.graph import StateGraph, START, END
 
-rag_graph = StateGraph(GraphState)
-rag_graph.add_node("retrieve", retrieve)
-rag_graph.add_node("generate_answer", generate_answer)
+builder = StateGraph(GraphState)
+builder.add_node("retrieve", retrieve)
+builder.add_node("generate_answer", generate_answer)
 # Add more nodes as needed (e.g., grade_documents, rewrite_query)
-rag_graph.add_edge("retrieve", "generate_answer")
-rag_graph.add_edge("generate_answer", END)
+builder.add_edge(START, "retrieve")
+builder.add_edge("retrieve", "generate_answer")
+builder.add_edge("generate_answer", END)
+
+rag_graph = builder.compile()
+result = rag_graph.invoke({"question": "What is LangGraph?"})
 ```
 
 #### 4. **Integrate External Tools**

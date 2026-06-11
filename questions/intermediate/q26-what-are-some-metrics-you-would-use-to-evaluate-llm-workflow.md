@@ -11,7 +11,7 @@ Here are some key metrics and evaluation strategies for LLM workflows managed by
 1. **Token Usage and Cost**
    - Track the number of tokens processed per workflow step or run.
    - Estimate costs by multiplying token usage by the price per token (especially important for commercial LLM APIs).
-   - Example: Use tools like Langfuse to instrument and visualize token usage and costs.
+   - Example: Use tools like LangSmith (LangChain's first-party tracing/eval platform) or Langfuse to instrument and visualize token usage and costs.
 
 2. **Latency and Throughput**
    - Measure the time taken to complete each workflow step and the overall workflow.
@@ -47,14 +47,19 @@ Here are some key metrics and evaluation strategies for LLM workflows managed by
 
 ```python
 import mlflow
+
 # Assume eval_df has columns: 'inputs', 'ground_truth', 'predictions'
-mlflow.evaluate(
+results = mlflow.evaluate(
     data=eval_df,
-    model_type="llm",
     targets="ground_truth",
     predictions="predictions",
-    evaluators=["bleu", "rouge", "llm-as-a-judge"]
+    model_type="question-answering",  # built-in heuristic metrics (exact match, toxicity, etc.)
+    extra_metrics=[
+        mlflow.metrics.rougeL(),                     # string-overlap metric
+        mlflow.metrics.genai.answer_correctness(),   # LLM-as-a-judge grader
+    ],
 )
+print(results.metrics)
 ```
 
 ---

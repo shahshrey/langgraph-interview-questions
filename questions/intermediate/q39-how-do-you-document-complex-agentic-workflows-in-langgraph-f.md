@@ -18,19 +18,25 @@ Here’s how to document complex agentic workflows in LangGraph for effective te
 ### 1. **Use Visual Diagrams**
 - **State Graphs**: Visualize the workflow using state diagrams or flowcharts. This helps team members quickly grasp the flow of data and decision points between agents.
 - **Node and Edge Mapping**: Clearly label each node (agent/task) and edge (transition/condition) in the diagram.
+- **Built-in Visualization**: LangGraph can generate diagrams directly from the compiled graph with `graph.get_graph().draw_mermaid()` (or `.draw_mermaid_png()`), so diagrams stay in sync with the code; LangGraph Studio also visualizes graphs interactively.
 - **Example**: 
   ```python
+  from langgraph.graph import StateGraph, START, END
+
   # Example node and edge setup
   workflow = StateGraph(PresentationState)
   workflow.add_node("researcher", topic_researcher_agent)
   workflow.add_node("outliner", outline_generator_agent)
   workflow.add_node("content_creator", slides_content_generator_agent)
   workflow.add_node("faqs_creator", faqs_generator_agent)
-  workflow.set_entry_point("researcher")
+  workflow.add_edge(START, "researcher")
   workflow.add_edge("researcher", "outliner")
   workflow.add_edge("outliner", "content_creator")
   workflow.add_edge("content_creator", "faqs_creator")
   workflow.add_edge("faqs_creator", END)
+
+  graph = workflow.compile()
+  print(graph.get_graph().draw_mermaid())  # Mermaid diagram for docs
   ```
 
 ### 2. **Inline Code Documentation**

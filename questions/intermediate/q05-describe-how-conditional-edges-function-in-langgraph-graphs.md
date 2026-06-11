@@ -23,9 +23,9 @@
 
 ```python
 def route_by_status(state):
-    if state.error_count >= 3:
+    if state["error_count"] >= 3:
         return "error"
-    elif state.status == "NEED_TOOL":
+    elif state["status"] == "NEED_TOOL":
         return "process"
     else:
         return "retry"

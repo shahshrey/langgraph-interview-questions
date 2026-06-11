@@ -39,24 +39,33 @@ Minimizing latency in LangGraph workflows is crucial for delivering responsive A
 
 ### **Code Example: Parallel Node Execution in LangGraph**
 ```python
-from langgraph.graph import StateGraph, END
-from langgraph.graph.message import add_messages
-from langgraph.prebuilt import ToolNode
+import operator
+from typing import Annotated
+from typing_extensions import TypedDict
+from langgraph.graph import StateGraph, START, END
 
-# Define two independent tool nodes
-tool_node1 = ToolNode(tool=tool1)
-tool_node2 = ToolNode(tool=tool2)
+class State(TypedDict):
+    # Reducer lets both parallel branches write to the same key
+    results: Annotated[list, operator.add]
+
+def call_tool1(state: State):
+    return {"results": ["tool1 output"]}
+
+def call_tool2(state: State):
+    return {"results": ["tool2 output"]}
 
 # Build a graph with parallel branches
-graph = StateGraph()
-graph.add_node("tool1", tool_node1)
-graph.add_node("tool2", tool_node2)
-graph.add_edge("tool1", END)
-graph.add_edge("tool2", END)
-graph.set_entry_point(["tool1", "tool2"])  # Parallel entry
+builder = StateGraph(State)
+builder.add_node("tool1", call_tool1)
+builder.add_node("tool2", call_tool2)
+builder.add_edge(START, "tool1")  # Fan out: both nodes run
+builder.add_edge(START, "tool2")  # in the same super-step
+builder.add_edge("tool1", END)
+builder.add_edge("tool2", END)
 
-# Run the graph
-result = graph.run(input_data)
+# Compile and run the graph
+graph = builder.compile()
+result = graph.invoke({"results": []})
 ```
 *This pattern ensures both tools are called in parallel, minimizing total latency.*
 

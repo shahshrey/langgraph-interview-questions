@@ -18,10 +18,13 @@ Scaling LangGraph for high-concurrency scenarios involves a combination of archi
   - LangGraph supports asynchronous processing, enabling non-blocking execution of long-running tasks and concurrent user interactions. This is essential for handling high-traffic and high-concurrency applications.
 
 - **Statelessness and Session Management:**
-  - For scalable deployments, maintain global state, pending messages, and user responses outside the LangGraph workflow (e.g., in a distributed cache or database) using a unique `session_id`. This allows horizontal scaling and stateless service instances.
+  - For scalable deployments, persist conversation state in a shared, database-backed checkpointer (e.g., `PostgresSaver`/`AsyncPostgresSaver` from `langgraph-checkpoint-postgres`) keyed by `thread_id`, so any stateless service instance can resume any conversation. Keep other global data (queues, caches) in external systems like Redis. This allows horizontal scaling of service instances.
+
+- **Durability Modes:**
+  - LangGraph lets you tune how checkpoint writes happen per invocation via `durability="exit" | "async" | "sync"`. `"async"` (write checkpoints in the background) or `"exit"` (write only at graph exit) reduce persistence overhead under load; `"sync"` maximizes fault tolerance at the cost of latency.
 
 - **Managed vs. Self-Hosted Scaling:**
-  - The LangGraph Platform offers managed, scalable infrastructure with built-in deployment, monitoring, and scaling. For open-source/self-hosted deployments, you must implement your own scaling, API layer, and monitoring.
+  - LangSmith Deployment (formerly LangGraph Platform/Cloud) offers managed, scalable infrastructure for LangGraph Server with built-in deployment, task queues, monitoring, and scaling. For open-source/self-hosted deployments (LangGraph Server in Docker/Kubernetes, or your own FastAPI service plus a Postgres checkpointer), you must implement your own scaling, API layer, and monitoring.
 
 ---
 
@@ -30,9 +33,12 @@ Scaling LangGraph for high-concurrency scenarios involves a combination of archi
 ```python
 from langgraph.graph import StateGraph
 
-graph = StateGraph()
+builder = StateGraph(State)
 # ... define nodes and edges ...
-graph.set_max_concurrency(10)  # Limit to 10 concurrent nodes
+graph = builder.compile()
+
+# Limit to 10 concurrently running tasks for this invocation
+result = graph.invoke(input_data, config={"max_concurrency": 10})
 ```
 
 ---
@@ -41,9 +47,9 @@ graph.set_max_concurrency(10)  # Limit to 10 concurrent nodes
 
 - **Monitor and Throttle API Usage:** If your workflow interacts with rate-limited APIs (e.g., Wikipedia, ArXiv), monitor usage and throttle concurrency to avoid hitting limits.
 - **Use Asynchronous Nodes:** Implement async functions for nodes to maximize throughput and minimize blocking.
-- **Externalize State:** Store workflow state, message queues, and session data in scalable external systems (e.g., Redis, DynamoDB) to enable stateless scaling.
+- **Externalize State:** Store workflow state in a shared database-backed checkpointer (Postgres, Redis) and message queues/session data in scalable external systems to enable stateless scaling of app instances.
 - **Leverage Parallelization Patterns:** Use map-reduce or dynamic task creation (via the Send API) for workloads where the number of parallel tasks is determined at runtime.
-- **Deploy on Scalable Infrastructure:** Use container orchestration (Kubernetes, ECS) or the LangGraph Platform for auto-scaling and high availability.
+- **Deploy on Scalable Infrastructure:** Use container orchestration (Kubernetes, ECS) for self-hosted LangGraph Server, or LangSmith Deployment for managed auto-scaling and high availability.
 
 ---
 
@@ -62,6 +68,7 @@ A research assistant application uses LangGraph to clarify ambiguous queries. Th
 ---
 
 **References:**
+- [LangGraph Docs: Durable Execution](https://docs.langchain.com/oss/python/langgraph/durable-execution)
 - [Scaling LangGraph Agents: Parallelization, Subgraphs, and Map-Reduce](https://aipractitioner.substack.com/p/scaling-langgraph-agents-parallelization)
 - [A Developer's Guide to LangGraph for LLM Applications | MetaCTO](https://www.metacto.com/blogs/a-developer-s-guide-to-langgraph-building-stateful-controllable-llm-applications)
 - [Mastering LangGraph Streaming: Advanced Techniques and Best Practices](https://sparkco.ai/blog/mastering-langgraph-streaming-advanced-techniques-and-best-practices)

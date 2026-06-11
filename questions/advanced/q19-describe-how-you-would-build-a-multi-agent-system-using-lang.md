@@ -22,22 +22,24 @@ Here’s a comprehensive explanation of how to build a multi-agent system using 
    - Each agent can have its own workflow, tools, and prompt templates.
 
 #### 2. **Create Individual Agent Graphs**
-   - Use LangGraph to define each agent as a subgraph, encapsulating its logic and tool usage.
-   - Example (Python pseudocode):
+   - Use LangGraph to define each agent as a subgraph, encapsulating its logic and tool usage. For standard tool-calling agents, the prebuilt `create_agent` (from `langchain.agents`) returns a compiled LangGraph graph that can be used directly as a node.
+   - Example (Python):
      ```python
-     from langgraph.graph import StateGraph
+     from langchain.agents import create_agent
 
-     def create_agent(agent_name, tools, prompt_template):
-         graph = StateGraph()
-         # Add nodes and edges for the agent's workflow
-         # e.g., tool calls, LLM calls, decision points
-         return graph
+     research_agent = create_agent(
+         model="anthropic:claude-sonnet-4-5",
+         tools=[search_tool],
+         system_prompt="You are a research agent. Gather relevant facts.",
+     )
+     # research_agent is a compiled LangGraph graph — usable as a subgraph/node
      ```
 
 #### 3. **Orchestrate Agents with a Supervisor or Swarm Pattern**
    - **Supervisor Pattern**: A central agent (supervisor) coordinates the workflow, delegating tasks to specialized agents and integrating their outputs.
-   - **Swarm Pattern**: Agents communicate peer-to-peer, possibly voting or sharing state, with less central control.
-   - LangGraph supports both patterns via flexible graph composition.
+   - **Swarm Pattern**: Agents hand control to each other peer-to-peer, with less central control.
+   - LangGraph supports both patterns via flexible graph composition. **Handoffs** are implemented with `Command` (from `langgraph.types`): a node or an agent's tool returns `Command(goto="other_agent", update={...}, graph=Command.PARENT)` to update state and transfer control to another agent in the parent graph.
+   - The prebuilt libraries **`langgraph-supervisor`** (`create_supervisor`) and **`langgraph-swarm`** (`create_swarm`) implement these patterns out of the box.
 
 #### 4. **Enable Cyclical and Conditional Flows**
    - Unlike simple DAGs, LangGraph allows cycles for:
@@ -59,26 +61,41 @@ Here’s a comprehensive explanation of how to build a multi-agent system using 
 ### **Code Example: Multi-Agent Orchestration**
 
 ```python
-from langgraph.graph import StateGraph
+from langchain.agents import create_agent
+from langgraph.graph import StateGraph, START, END, MessagesState
 
-# Define agents
-research_agent = create_agent("Research", [search_tool], research_prompt)
-critique_agent = create_agent("Critique", [llm_tool], critique_prompt)
-synthesis_agent = create_agent("Synthesis", [llm_tool], synthesis_prompt)
+# Define agents (each is a compiled LangGraph graph)
+research_agent = create_agent(model, tools=[search_tool], system_prompt=research_prompt)
+critique_agent = create_agent(model, tools=[], system_prompt=critique_prompt)
+synthesis_agent = create_agent(model, tools=[], system_prompt=synthesis_prompt)
 
-# Supervisor graph
-supervisor = StateGraph()
-supervisor.add_node("Research", research_agent)
-supervisor.add_node("Critique", critique_agent)
-supervisor.add_node("Synthesis", synthesis_agent)
+# Orchestrating graph: agents as subgraph nodes
+builder = StateGraph(MessagesState)
+builder.add_node("research", research_agent)
+builder.add_node("critique", critique_agent)
+builder.add_node("synthesis", synthesis_agent)
 
 # Define edges and cycles
-supervisor.add_edge("Research", "Critique")
-supervisor.add_edge("Critique", "Synthesis")
-supervisor.add_edge("Synthesis", "Research", condition=needs_more_research)
+builder.add_edge(START, "research")
+builder.add_edge("research", "critique")
+builder.add_edge("critique", "synthesis")
+# Cycle back for more research if needed, otherwise finish
+builder.add_conditional_edges("synthesis", needs_more_research, ["research", END])
 
-# Run the system
-result = supervisor.run(initial_state)
+# Compile and run the system
+graph = builder.compile()
+result = graph.invoke(initial_state)
+```
+
+Alternatively, use the prebuilt supervisor library:
+
+```python
+from langgraph_supervisor import create_supervisor
+
+supervisor = create_supervisor(
+    agents=[research_agent, critique_agent, synthesis_agent],
+    model=model,
+).compile()
 ```
 
 ---
@@ -107,6 +124,7 @@ result = supervisor.run(initial_state)
 ---
 
 ### **References**
+- [LangGraph Docs: Multi-Agent Systems](https://docs.langchain.com/oss/python/langgraph/multi-agent)
 - [FutureSmart AI: Multi-Agent System Tutorial with LangGraph](https://blog.futuresmart.ai/multi-agent-system-with-langgraph)
 - [Elastic: Multi-Agent System with LangGraph](https://www.elastic.co/search-labs/blog/multi-agent-system-llm-agents-elasticsearch-langgraph)
 - [YouTube: Fully Local Multi-Agent Systems with LangGraph](https://www.youtube.com/watch?v=4oC1ZKa9-Hs)

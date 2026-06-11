@@ -24,6 +24,7 @@
 A simplified example of defining a state graph in LangGraph (Python):
 
 ```python
+from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, START, END
 from langgraph.managed import RemainingSteps
 
@@ -31,8 +32,9 @@ class State(TypedDict):
     messages: list
     remaining_steps: RemainingSteps  # Tracks steps until limit
 
-graph = StateGraph(State)
+builder = StateGraph(State)
 # Define nodes and edges here...
+graph = builder.compile()
 ```
 
 #### Best Practices

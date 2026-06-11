@@ -28,32 +28,44 @@ LangGraph is a powerful framework for constructing agentic workflows, making it 
 ### **Code Example (Simplified)**
 
 ```python
-import langgraph
+from typing_extensions import TypedDict
+from langgraph.graph import StateGraph, START, END
 
-# Define agents
-def analyze_query(state):
+class RecState(TypedDict):
+    query: str
+    preferences: dict
+    user_profile: dict
+    category: str
+    items: list
+    recommendations: list
+
+# Define agents (each returns a partial state update)
+def analyze_query(state: RecState):
     # Extract user intent and preferences
     return {"category": extract_category(state["query"])}
 
-def retrieve_items(state):
+def retrieve_items(state: RecState):
     # Use vector search to find similar items
     return {"items": vector_search(state["category"], state["preferences"])}
 
-def recommend(state):
+def recommend(state: RecState):
     # Rank or filter items
     return {"recommendations": rank_items(state["items"], state["user_profile"])}
 
 # Build the graph
-graph = langgraph.Graph()
-graph.add_node("analyze_query", analyze_query)
-graph.add_node("retrieve_items", retrieve_items)
-graph.add_node("recommend", recommend)
-graph.add_edge("analyze_query", "retrieve_items")
-graph.add_edge("retrieve_items", "recommend")
+builder = StateGraph(RecState)
+builder.add_node("analyze_query", analyze_query)
+builder.add_node("retrieve_items", retrieve_items)
+builder.add_node("recommend", recommend)
+builder.add_edge(START, "analyze_query")
+builder.add_edge("analyze_query", "retrieve_items")
+builder.add_edge("retrieve_items", "recommend")
+builder.add_edge("recommend", END)
+graph = builder.compile()
 
 # Run the workflow
 initial_state = {"query": "Find me a sci-fi book", "preferences": {...}, "user_profile": {...}}
-result = graph.run(initial_state)
+result = graph.invoke(initial_state)
 print(result["recommendations"])
 ```
 

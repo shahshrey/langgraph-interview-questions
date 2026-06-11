@@ -30,23 +30,39 @@ LangGraph provides robust mechanisms for session persistence and recovery, ensur
 - **How Persistence Works**
   - When a state change occurs (e.g., a new message or step in the workflow), the checkpointer saves a checkpoint to the chosen backend (memory, SQLite, or Postgres).
   - To recover a session, the application fetches the stored state using the thread ID and resumes execution from the last checkpoint.
+  - You can inspect a session with `graph.get_state(config)`, review its full history with `graph.get_state_history(config)`, and manually patch state with `graph.update_state(config, values)` (e.g., for repair or "time travel" forking).
 
 ---
 
 ### **Code Example**
 
 ```python
+import sqlite3
 from langgraph.checkpoint.sqlite import SqliteSaver
-from langgraph.graph import Graph
+from langgraph.graph import StateGraph, START
 
-# Set up a checkpointer
-checkpointer = SqliteSaver("my_sessions.db")
+# Set up a checkpointer (pip install langgraph-checkpoint-sqlite)
+checkpointer = SqliteSaver(sqlite3.connect("my_sessions.db", check_same_thread=False))
 
 # Compile your graph with the checkpointer
-graph = Graph(...).compile(checkpointer=checkpointer)
+builder = StateGraph(State)
+# ... add nodes and edges ...
+graph = builder.compile(checkpointer=checkpointer)
 
-# To resume a session
-resumed_state = graph.invoke(None, config={"thread_id": "user-session-123"})
+# thread_id goes under "configurable"
+config = {"configurable": {"thread_id": "user-session-123"}}
+
+# Run a turn; state is checkpointed automatically
+graph.invoke({"messages": [("user", "Hello!")]}, config)
+
+# Later (even after a restart): inspect the saved session state
+snapshot = graph.get_state(config)
+
+# Resume the conversation — prior state is loaded from the checkpoint
+graph.invoke({"messages": [("user", "Where were we?")]}, config)
+
+# Optionally repair/modify a session before resuming
+graph.update_state(config, {"messages": [("user", "corrected input")]})
 ```
 
 ---

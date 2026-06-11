@@ -14,34 +14,32 @@
 #### How Persistence Works in LangGraph
 
 1. **Checkpointers and Memory Stores**
-   - LangGraph uses the concept of a **checkpointer** to persist the state of each node in the agent's graph.
-   - For Redis, classes like `RedisSaver` or `AsyncRedisSaver` are used as checkpointers.
-   - For MongoDB, a similar store (e.g., MongoDB Store for LangGraph) is used to persist and retrieve memory.
+   - LangGraph uses the concept of a **checkpointer** to persist a snapshot of the graph state at each step (super-step), keyed by `thread_id`.
+   - Official checkpointer packages exist for **Postgres** (`langgraph-checkpoint-postgres`, `PostgresSaver`/`AsyncPostgresSaver`), **SQLite** (`langgraph-checkpoint-sqlite`, `SqliteSaver`), and **Redis** (`langgraph-checkpoint-redis`, `RedisSaver`/`AsyncRedisSaver`).
+   - For MongoDB, the community package `langgraph-checkpoint-mongodb` provides a `MongoDBSaver` checkpointer, and MongoDB also offers a Store integration for long-term memory.
 
 2. **Short-term vs. Long-term Memory**
-   - **Short-term memory**: Conversation history and state for the current session, typically stored in Redis for fast access.
-   - **Long-term memory**: Knowledge or facts that need to be recalled across sessions, often stored in a database like MongoDB or as vector embeddings for semantic search.
+   - **Short-term memory**: Conversation history and state for the current thread, persisted via a checkpointer (e.g., Redis for fast access).
+   - **Long-term memory**: Knowledge or facts that need to be recalled across threads and sessions, stored via LangGraph's `Store` API (e.g., `PostgresStore`, or document stores like MongoDB), optionally with vector embeddings for semantic search.
 
 ---
 
 #### Example: Using Redis for Persistent Memory
 
 ```python
-import os
-import redis
+# pip install langgraph-checkpoint-redis
 from langgraph.checkpoint.redis import RedisSaver
 
-# Set up Redis connection
-REDIS_HOST = 'localhost'
-REDIS_PORT = 6379
-REDIS_DB = int(os.getenv("REDIS_DB", 0))
-redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB)
+REDIS_URI = "redis://localhost:6379"
 
-# Create Redis-based checkpointer
-redis_checkpoint_saver = RedisSaver(redis_client=redis_client)
+with RedisSaver.from_conn_string(REDIS_URI) as checkpointer:
+    checkpointer.setup()  # create required indices on first use
 
-# Use this checkpointer when compiling your LangGraph agent
-# agent.compile(checkpointer=redis_checkpoint_saver)
+    # Use this checkpointer when compiling your LangGraph graph
+    graph = builder.compile(checkpointer=checkpointer)
+
+    config = {"configurable": {"thread_id": "user-123"}}
+    result = graph.invoke({"messages": [("user", "Hi!")]}, config)
 ```
 
 - **Persistence**: If Redis persistence is enabled, conversation history and state survive restarts. Returning users (with the same thread/user ID) can resume where they left off.
@@ -50,7 +48,7 @@ redis_checkpoint_saver = RedisSaver(redis_client=redis_client)
 
 #### Example: Using MongoDB for Persistent Memory
 
-- LangGraph's MongoDB integration stores long-term memories as JSON documents, mapping directly to MongoDB's document model.
+- The community package `langgraph-checkpoint-mongodb` provides `MongoDBSaver`, a checkpointer that persists thread state in MongoDB; MongoDB's Store integration stores long-term memories as JSON documents, mapping directly to MongoDB's document model.
 - Each memory is organized by namespace and key-value, allowing efficient retrieval and semantic search.
 
 **Key features:**
@@ -92,7 +90,7 @@ redis_checkpoint_saver = RedisSaver(redis_client=redis_client)
 ---
 
 **Summary:**  
-To make memory persistent in LangGraph, use checkpointers like `RedisSaver` for Redis or the MongoDB Store for MongoDB. These backends store agent state and conversation history, enabling agents to recall information across sessions and restarts, thus supporting more intelligent, context-aware applications.
+To make memory persistent in LangGraph, use checkpointers like `RedisSaver` (or the officially supported `PostgresSaver`/`SqliteSaver`) for thread state, and `MongoDBSaver` or a `Store` backend (e.g., `PostgresStore`, MongoDB Store) for long-term memory. These backends store agent state and conversation history, enabling agents to recall information across sessions and restarts, thus supporting more intelligent, context-aware applications.
 
 ---
 

@@ -6,7 +6,8 @@
 
 **Key Concepts**
 
-- **LangGraph** is a new framework from the LangChain team, designed for building agentic and multi-step LLM workflows using a graph-based approach.
+- **LangGraph** is the LangChain team's framework for building agentic and multi-step LLM workflows using a graph-based approach. Since the 1.0 releases (October 2025), the recommended `create_agent` in LangChain is itself built on LangGraph, so migrating means moving onto the LangGraph runtime.
+- **Legacy LangChain agents** (`initialize_agent`, `AgentExecutor`) were removed in LangChain 1.x; their replacement is `create_agent` (or a custom `StateGraph` for full control).
 - **Migration** involves updating dependencies, refactoring code to use new APIs, and adapting to architectural changes.
 
 ---
@@ -16,22 +17,22 @@
 1. **Update Dependencies**
    - Upgrade your packages to the latest versions:
      ```bash
-     pip install -U langgraph langchain-core
+     pip install -U langgraph langchain langchain-core
      ```
    - For JavaScript/TypeScript projects, update import paths:
      ```js
      // Old
-     import { createReactAgent } from "@langchain/langgraph/prebuilts";
+     import { createReactAgent } from "@langchain/langgraph/prebuilt";
      // New
      import { createAgent } from "langchain";
      ```
 
 2. **Refactor Agent Creation**
-   - The `create_react_agent` function is deprecated. Use `create_agent` instead.
+   - Legacy `initialize_agent`/`AgentExecutor` were removed, and `create_react_agent` from `langgraph.prebuilt` is deprecated. Use `create_agent` instead (it returns a compiled LangGraph graph).
    - Example (Python):
      ```python
-     # Old
-     from langchain.agents import create_react_agent
+     # Old (deprecated)
+     from langgraph.prebuilt import create_react_agent
      agent = create_react_agent(...)
      
      # New
@@ -48,7 +49,7 @@
    - Pre/post-model hooks are replaced by middleware (`beforeModel`, `afterModel`).
 
 5. **Pin and Test Versions**
-   - Temporarily pin your LangChain version (e.g., `langchain>=0.2,<0.3`) before moving to the latest LangGraph.
+   - Temporarily pin your pre-1.0 versions (e.g., `langchain<1.0`, `langgraph<1.0`) while you migrate, then upgrade to the 1.x line once tests pass.
    - Run your test suite to catch breaking changes early.
 
 6. **Compile and Cache Graphs**

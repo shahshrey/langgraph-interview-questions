@@ -10,7 +10,7 @@ Here’s a clear explanation of the difference between synchronous and asynchron
 
 ### **Synchronous Workflows**
 - **Definition:** In LangGraph, synchronous workflows execute tasks one after another, blocking the main thread until each task (or the entire graph) completes.
-- **How it works:** When you use methods like `.invoke`, the workflow runs step-by-step. If a node in the graph is waiting for a slow operation (like an API call), the entire workflow waits until that operation finishes before moving on.
+- **How it works:** When you use methods like `.invoke` (or `.stream` for synchronous streaming), the workflow runs step-by-step. If a node in the graph is waiting for a slow operation (like an API call), the entire workflow waits until that operation finishes before moving on.
 - **Example:**
     ```python
     result = graph.invoke(input_data)
@@ -21,7 +21,7 @@ Here’s a clear explanation of the difference between synchronous and asynchron
 
 ### **Asynchronous Workflows**
 - **Definition:** Asynchronous workflows allow tasks to run without blocking the main thread, enabling other operations to proceed while waiting for slow tasks (like I/O or API calls).
-- **How it works:** Using methods like `.ainvoke` or defining node functions with `async def`, LangGraph can execute multiple tasks concurrently. This is especially useful for workflows that involve waiting (e.g., for external APIs or databases).
+- **How it works:** Using methods like `.ainvoke` (or `.astream` for async streaming) and defining node functions with `async def`, LangGraph can execute multiple tasks concurrently. These async methods must be awaited (`await graph.ainvoke(...)` — note that `await graph.invoke(...)` is incorrect, since `.invoke` is the sync method). This is especially useful for workflows that involve waiting (e.g., for external APIs or databases).
 - **Example:**
     ```python
     result = await graph.ainvoke(input_data)

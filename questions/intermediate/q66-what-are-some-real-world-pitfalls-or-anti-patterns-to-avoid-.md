@@ -15,7 +15,7 @@ Here are some real-world pitfalls and anti-patterns to avoid when building with 
 
 ### 2. **Neglecting Error Handling**
 - **Pitfall:** Treating errors as rare edge cases or scattering try/except blocks throughout the code.
-- **Best Practice:** Make error handling a first-class concern. Use LangGraph’s built-in error nodes, retry policies, and fallback flows. Handle errors at the node, graph, and application levels for graceful degradation and clear failure reporting.
+- **Best Practice:** Make error handling a first-class concern. Use LangGraph’s built-in retry policies (`RetryPolicy` via `add_node(..., retry_policy=...)`), dedicated error-handling nodes, and fallback flows. Handle errors at the node, graph, and application levels for graceful degradation and clear failure reporting.
 - **Reference:** [Advanced Error Handling Strategies in LangGraph](https://sparkco.ai/blog/advanced-error-handling-strategies-in-langgraph-applications), [LangGraph Error Handling Guide](https://dev.to/aiengineering/a-beginners-guide-to-handling-errors-in-langgraph-with-retry-policies-h22)
 
 ### 3. **Overusing AI for Simple Tasks**

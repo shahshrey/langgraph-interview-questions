@@ -16,15 +16,19 @@ LangGraph, when deployed as a microservices-based agentic system, requires robus
 
 #### 2. **Retry Logic and Exponential Backoff**
 - Failed agent calls or service requests should be retried automatically, using exponential backoff to avoid overwhelming the system.
-- Example (Python pseudocode):
+- LangGraph supports this natively with per-node retry policies:
   ```python
-  def __getattr__(self, name):
-      try:
-          return getattr(self._saver, name)
-      except Exception as e:
-          logger.warning(f"Operation failed, retrying connection: {e}")
-          self._connect()
-          return getattr(self._saver, name)
+  from langgraph.types import RetryPolicy
+
+  builder.add_node(
+      "call_external_service",
+      call_external_service,
+      retry_policy=RetryPolicy(
+          max_attempts=3,
+          initial_interval=1.0,
+          backoff_factor=2.0,  # exponential backoff
+      ),
+  )
   ```
 - This pattern ensures transient failures are handled without manual intervention.
 

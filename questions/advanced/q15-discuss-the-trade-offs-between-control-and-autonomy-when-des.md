@@ -45,17 +45,18 @@
 
 #### **Code Example: Control in LangGraph**
 ```python
-from langgraph import StateGraph
+from langgraph.graph import StateGraph, START, END
 
-graph = StateGraph()
-graph.add_node("start", start_fn)
-graph.add_node("process", process_fn)
-graph.add_node("end", end_fn)
-graph.add_edge("start", "process")
-graph.add_edge("process", "end")
+builder = StateGraph(State)
+builder.add_node("intake", intake_fn)
+builder.add_node("process", process_fn)
+builder.add_edge(START, "intake")
+builder.add_edge("intake", "process")
+builder.add_edge("process", END)
+graph = builder.compile()
 # All paths are explicitly defined
 ```
-*Here, the agent can only follow the paths you define—no dynamic deviation.*
+*Here, the agent can only follow the paths you define—no dynamic deviation. (For controlled dynamism, LangGraph offers conditional edges, `Command(goto=...)`, and `Send` for runtime routing—but always among nodes you declared.)*
 
 ---
 

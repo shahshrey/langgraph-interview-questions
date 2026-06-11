@@ -9,14 +9,15 @@ Here are best practices for maintaining and updating LangGraph workflows in prod
 ## **Key Concepts and Best Practices**
 
 ### 1. **Modular and Maintainable Workflow Design**
-- **Modular Node Development:** Design each node (step) as an independent, reusable unit with clear inputs and outputs. This makes updates and debugging easier.
+- **Modular Node Development:** Design each node (step) as an independent, reusable function with clear inputs and outputs. This makes updates and debugging easier.
     ```python
-    class CustomNode(Node):
-        def process(self, data):
-            # Custom processing logic
-            return modified_data
+    def custom_node(state: State) -> dict:
+        # Custom processing logic
+        return {"results": modified_data}  # return a partial state update
+
+    builder.add_node("custom", custom_node)
     ```
-- **State Management:** Use LangGraph’s stateful execution features (e.g., `AgentState` or custom state objects) to maintain context across workflow steps. Store only necessary information to avoid state bloat.
+- **State Management:** Use LangGraph’s stateful execution features (e.g., the prebuilt `MessagesState` or a custom TypedDict/Pydantic state schema with reducers) to maintain context across workflow steps. Store only necessary information to avoid state bloat.
 
 ### 2. **Observability and Monitoring**
 - **Comprehensive Logging:** Integrate detailed logging at each node and transition. This helps in debugging, tracking workflow progress, and identifying bottlenecks.

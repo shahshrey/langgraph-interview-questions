@@ -10,7 +10,7 @@ A **StateGraph** in LangGraph is a foundational concept that enables the creatio
 
 ### **Key Concepts**
 
-- **StateGraph**: A StateGraph is a directed graph where each node represents a function (or operation) that takes a shared "state" as input, updates it, and passes it along to the next node. The state is a structured object (often defined using Python's TypedDict or Pydantic BaseModel) that holds all the information needed as the workflow progresses.
+- **StateGraph**: A StateGraph is a directed graph where each node represents a function (or operation) that takes the shared "state" as input and returns a partial update, which LangGraph merges into the state before passing it along to the next node. The state is a structured object (often defined using Python's TypedDict or Pydantic BaseModel) that holds all the information needed as the workflow progresses.
 
 - **State**: The state is a data structure that carries information through the graph. Each node can read from and write to this state, enabling persistent memory and context as the workflow advances.
 
@@ -31,27 +31,24 @@ class MathState(TypedDict):
     sum_result: float
     final_result: float
 
-# Define node functions
-async def add_numbers(state: MathState) -> MathState:
-    state["sum_result"] = state["num1"] + state["num2"]
-    return state
+# Define node functions — each returns a PARTIAL state update
+def add_numbers(state: MathState) -> dict:
+    return {"sum_result": state["num1"] + state["num2"]}
 
-async def multiply_result(state: MathState) -> MathState:
-    state["final_result"] = state["sum_result"] * 2
-    return state
+def multiply_result(state: MathState) -> dict:
+    return {"final_result": state["sum_result"] * 2}
 
 # Build the StateGraph
-graph = StateGraph(MathState)
-graph.add_node("add", add_numbers)
-graph.add_node("multiply", multiply_result)
-graph.add_edge(START, "add")
-graph.add_edge("add", "multiply")
-graph.add_edge("multiply", END)
+builder = StateGraph(MathState)
+builder.add_node("add", add_numbers)
+builder.add_node("multiply", multiply_result)
+builder.add_edge(START, "add")
+builder.add_edge("add", "multiply")
+builder.add_edge("multiply", END)
 
 # Compile and run
-app = graph.compile()
-initial_state = {"num1": 5, "num2": 3, "sum_result": 0, "final_result": 0}
-final_state = await app.invoke(initial_state)
+app = builder.compile()
+final_state = app.invoke({"num1": 5, "num2": 3})
 print(final_state["final_result"])  # Output: 16
 ```
 

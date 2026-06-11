@@ -11,16 +11,21 @@ LangGraph is designed to orchestrate complex, stateful, and potentially long-run
 ### **Key Concepts**
 
 - **Durable Execution & Checkpointing:**  
-  LangGraph provides built-in support for durable execution, which means the state of your workflow is periodically saved (checkpointed) to a persistent store (e.g., Redis, DynamoDB, file system). This allows workflows to resume from the last checkpoint after interruptions, such as system failures or intentional pauses for human-in-the-loop steps.  
+  LangGraph provides built-in support for durable execution: the state of your workflow is saved (checkpointed) by a **checkpointer** to a persistent store (in-memory for dev, SQLite via `langgraph-checkpoint-sqlite`, Postgres via `langgraph-checkpoint-postgres`, or Redis via `langgraph-checkpoint-redis`). This allows workflows to resume from the last checkpoint after interruptions, such as system failures or intentional pauses for human-in-the-loop steps.  
   - Reference: [LangChain Docs - Durable Execution](https://docs.langchain.com/oss/python/langgraph/durable-execution)
-  - Reference: [Appriai Blog - Orchestrating Stateful, Long-Running Agents](https://appriai.com/blog/langgraph-orchestrating-stateful-long-running-agents-with-ease)
+  - Reference: [LangChain Docs - Persistence](https://docs.langchain.com/oss/python/langgraph/persistence)
 
-- **Externalized State:**  
-  For truly long-running jobs (hours, days, or more), you should externalize state management. LangGraph does not enforce a specific database or timeout engine, so you can use any persistent storage that fits your needs (e.g., Redis, DynamoDB, file-based checkpoints).
-  - Reference: [Auxiliobits Blog - Orchestrating Long-Running Processes](https://www.auxiliobits.com/blog/orchestrating-long-running-processes-using-langgraph-agents/)
+- **Durability Modes:**  
+  You control the persistence/performance trade-off per run with the `durability` argument: `"exit"` (persist only when the run finishes), `"async"` (persist in the background while the next step runs), or `"sync"` (persist before each step starts — safest for critical, long-running jobs).
 
-- **Custom Timeout and Recovery Logic:**  
-  You can implement custom timeout logic and recovery strategies. If a graph crashes mid-execution, the checkpointed state allows for easy rehydration and resumption.
+- **Human-in-the-Loop Pauses:**  
+  For steps that must wait on a person (approvals, document review), call `interrupt(payload)` inside a node. The run pauses indefinitely (state is checkpointed), and you resume later — even days later — with `graph.invoke(Command(resume=value), config)`.
+
+- **Background Runs (LangGraph Server / LangSmith Deployment):**  
+  When deploying with LangGraph Server, you can launch fire-and-forget **background runs** via the `langgraph-sdk` client (`client.runs.create(...)`), poll or stream their status, and rely on the platform's task queue for retries — ideal for jobs that outlive an HTTP request.
+
+- **Recovery Logic:**  
+  If a graph crashes mid-execution, the checkpointed state allows for easy rehydration: re-invoke the graph with the same `thread_id` and it resumes from the last successful checkpoint rather than starting over.
 
 ---
 
@@ -28,18 +33,26 @@ LangGraph is designed to orchestrate complex, stateful, and potentially long-run
 
 ```python
 from langgraph.graph import StateGraph
+from langgraph.checkpoint.postgres import PostgresSaver
 
 # Define your state schema and graph as usual
-graph = StateGraph(...)
+builder = StateGraph(State)
+# ... add nodes and edges ...
 
-# Enable durable execution with a persistent store (e.g., Redis)
-graph.enable_durable_execution(store="redis://localhost:6379")
+# Enable durable execution by compiling with a persistent checkpointer
+with PostgresSaver.from_conn_string("postgresql://user:pass@host/db") as checkpointer:
+    checkpointer.setup()
+    graph = builder.compile(checkpointer=checkpointer)
 
-# Run the graph; it will checkpoint state at each step
-graph.run(input_data)
+    # Run the graph; "sync" persists state before each step
+    config = {"configurable": {"thread_id": "job-42"}}
+    graph.invoke(input_data, config, durability="sync")
+
+    # After a crash or pause, resume the same thread from the last checkpoint
+    # graph.invoke(None, config) or graph.invoke(Command(resume=...), config)
 ```
 
-- You can configure when state is persisted (e.g., after every step, only on exit, etc.) for performance vs. safety trade-offs.
+- The `durability` argument (`"exit"`, `"async"`, or `"sync"`) controls when state is persisted, letting you trade performance for safety.
 
 ---
 
@@ -50,13 +63,13 @@ graph.run(input_data)
   - Reference: [Sparkco Blog - State Management Best Practices](https://sparkco.ai/blog/mastering-langgraph-state-management-in-2025)
 
 - **Choose the Right Persistence Layer:**  
-  Select a storage backend that matches your reliability and scalability needs. For critical, long-running jobs, use production-grade stores (e.g., managed Redis, DynamoDB).
+  Select a checkpointer backend that matches your reliability and scalability needs. For critical, long-running jobs, use production-grade stores (e.g., `PostgresSaver` with managed Postgres, or the Redis checkpointer).
 
 - **Design for Recovery:**  
-  Ensure your workflow logic can handle resuming from any checkpointed state, not just from the beginning.
+  Ensure your workflow logic can handle resuming from any checkpointed state, not just from the beginning. Wrap non-deterministic side effects (API calls, etc.) so they behave correctly on replay.
 
 - **Human-in-the-Loop:**  
-  Durable execution is especially useful for workflows that require human validation or input at certain steps.
+  Durable execution is especially useful for workflows that require human validation or input at certain steps — use `interrupt()` and `Command(resume=...)` for these pauses.
 
 ---
 

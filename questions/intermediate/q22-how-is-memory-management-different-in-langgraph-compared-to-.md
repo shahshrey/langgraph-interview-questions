@@ -33,7 +33,7 @@ from langgraph.store.memory import InMemoryStore
 in_memory_store = InMemoryStore()
 
 # Compile the graph with the memory store
-graph = graph.compile(store=in_memory_store)
+graph = builder.compile(store=in_memory_store)
 ```
 
 #### **Best Practices**

@@ -4,7 +4,7 @@
   <img src="https://img.shields.io/badge/Questions-72-blue?style=for-the-badge" alt="72 Questions">
   <img src="https://img.shields.io/badge/Difficulty-Easy%20to%20Hard-orange?style=for-the-badge" alt="Difficulty Levels">
   <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="MIT License">
-  <img src="https://img.shields.io/badge/LangGraph-2024-purple?style=for-the-badge" alt="LangGraph 2024">
+  <img src="https://img.shields.io/badge/LangGraph-1.x-purple?style=for-the-badge" alt="LangGraph 1.x">
 </p>
 
 A comprehensive collection of **72 interview questions** covering LangGraph — from fundamentals to advanced production patterns. Perfect for interview preparation, learning, or teaching.
@@ -126,7 +126,7 @@ A comprehensive collection of **72 interview questions** covering LangGraph — 
 | 45 | [LangGraph and finite state machines](questions/basics/q45-can-you-explain-the-relation-between-langgraph-and-finite-st.md) | `fsm` `theory` |
 | 52 | [Visualization of graph structures](questions/basics/q52-what-options-are-available-for-visualization-of-graph-struct.md) | `visualization` |
 | 57 | [Logging patterns for workflows](questions/basics/q57-what-are-typical-logging-patterns-for-langgraph-workflows.md) | `logging` |
-| 67 | [Future trends in LangGraph (2024)](questions/basics/q67-summarize-the-future-trends-or-upcoming-features-in-langgrap.md) | `future` `trends` |
+| 67 | [Future trends in LangGraph](questions/basics/q67-summarize-the-future-trends-or-upcoming-features-in-langgrap.md) | `future` `trends` |
 
 ### 🟡 Medium Questions (38)
 

@@ -21,11 +21,18 @@ Here's a clear explanation of how to create a simple conversation agent using La
 First, set up your language model (e.g., GPT-4o, ChatAnthropic) and any tools you want the agent to use (like a search tool).
 
 ```python
-from langchain.chat_models import ChatAnthropic
-model = ChatAnthropic()
+from langchain.chat_models import init_chat_model
+from langchain_core.tools import tool
+
+model = init_chat_model("anthropic:claude-sonnet-4-5")
+
 # Optionally, define and bind tools
-search_tool = SearchTool()
-model.bind_tools([search_tool])
+@tool
+def search(query: str) -> str:
+    """Search the web for the given query."""
+    ...
+
+model_with_tools = model.bind_tools([search])  # bind_tools returns a new model
 ```
 
 ### 2. Define the Conversation State
@@ -33,8 +40,7 @@ model.bind_tools([search_tool])
 LangGraph uses a state object to track messages and context. The `MessagesState` schema is commonly used.
 
 ```python
-from langgraph import StateGraph
-from langgraph.states import MessagesState
+from langgraph.graph import StateGraph, MessagesState, START, END
 ```
 
 ### 3. Build the Conversation Graph
@@ -45,10 +51,10 @@ Create a graph where each node represents a step in the conversation. For a simp
 - (Optional) A "tools" node if you want the agent to use external tools.
 
 ```python
-graph = StateGraph(MessagesState)
-graph.add_node('agent', call_model)
-graph.add_edge('START', 'agent')
-graph.add_edge('agent', 'END')
+builder = StateGraph(MessagesState)
+builder.add_node("agent", call_model)
+builder.add_edge(START, "agent")
+builder.add_edge("agent", END)
 ```
 
 ### 4. Implement the Node Logic
@@ -58,19 +64,20 @@ Define what happens at each node. For the agent node, call the LLM with the curr
 ```python
 def call_model(state: MessagesState):
     # Use the model to generate a response based on the conversation history
-    response = model(state.messages)
-    state.messages.append(response)
-    return state
+    response = model_with_tools.invoke(state["messages"])
+    # Return a partial update; the add_messages reducer appends it to history
+    return {"messages": [response]}
 ```
 
-### 5. Run the Agent
+### 5. Compile and Run the Agent
 
-Start the conversation by sending a user message and let the graph process it.
+Compile the graph, then start the conversation by sending a user message.
 
 ```python
-state = MessagesState(messages=[user_message])
-final_state = graph.run(state)
-print(final_state.messages[-1])  # The agent's reply
+graph = builder.compile()
+
+final_state = graph.invoke({"messages": [{"role": "user", "content": "Hi there!"}]})
+print(final_state["messages"][-1].content)  # The agent's reply
 ```
 
 ---
@@ -85,7 +92,7 @@ print(final_state.messages[-1])  # The agent's reply
 
 ## Common Pitfalls
 
-- **Forgetting to update the state**: Always append new messages to the state to maintain conversation history.
+- **Forgetting to return new messages**: Always return new messages in the node's update dict so the `add_messages` reducer can maintain conversation history.
 - **Improper edge setup**: Ensure your graph's edges correctly represent the desired conversation flow.
 - **Not handling tool outputs**: If using tools, make sure their outputs are integrated into the conversation state.
 

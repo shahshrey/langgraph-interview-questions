@@ -21,20 +21,20 @@ Deploying a LangGraph app in a production environment involves several key steps
 
 ### 3. **Deployment Options**
 - **Cloud, Hybrid, or Self-hosted**: Choose your deployment model:
-  - **Cloud**: Use managed services like LangSmith or BentoCloud for easier scaling and monitoring.
-  - **Self-hosted**: Deploy on your own infrastructure for more control.
-- **Agent Server**: Deploy your graphs and agents to an Agent Server, which exposes them as APIs.
+  - **Managed (LangSmith Deployment)**: Use LangSmith Deployment (formerly known as LangGraph Platform/Cloud), the managed offering for deploying LangGraph apps with built-in scaling, persistence, and monitoring.
+  - **Self-hosted**: Run LangGraph Server yourself in Docker/Kubernetes, or build your own service (e.g., FastAPI) around a compiled graph with a Postgres checkpointer for more control.
+- **LangGraph Server**: Deploy your graphs and agents to LangGraph Server (the `langgraph-api` service defined by your `langgraph.json`), which exposes them as APIs consumable via the `langgraph-sdk`. Use `langgraph dev` (from `langgraph-cli`) to run a local development server.
 
 ### 4. **API Exposure**
 - **REST API**: Expose your LangGraph workflows as REST endpoints for integration with other services.
 - **Authentication**: Secure your APIs using API keys or other authentication mechanisms.
 
 ### 5. **Scaling and Background Tasks**
-- **Task API**: For long-running or resource-intensive workflows, use background task APIs (e.g., BentoML’s task API) to offload processing and improve responsiveness.
-- **Horizontal Scaling**: Deploy multiple instances behind a load balancer for high availability.
+- **Background Runs**: For long-running or resource-intensive workflows, use LangGraph Server's background runs API (or an external task queue) to offload processing and improve responsiveness.
+- **Horizontal Scaling**: Deploy multiple instances behind a load balancer for high availability, with a shared Postgres database for checkpoints.
 
 ### 6. **Monitoring, Debugging, and Observability**
-- **Studio UI**: Use tools like LangSmith Studio for debugging, monitoring, and troubleshooting deployed agents.
+- **LangGraph Studio**: Use LangGraph Studio (the visual debugging IDE, accessible via `langgraph dev`) to inspect, debug, and troubleshoot agents, and LangSmith for production tracing and evaluation.
 - **Logging and Metrics**: Implement structured logging and collect metrics for performance and error tracking.
 
 ### 7. **CI/CD and Updates**
@@ -43,26 +43,48 @@ Deploying a LangGraph app in a production environment involves several key steps
 
 ---
 
-## **Code Example: Deploying with BentoML**
+## **Code Example: Standard Deployment Workflow**
 
-```python
-# Example: Deploying a LangGraph agent as a REST API with BentoML
-import bentoml
-from langgraph_sdk import get_sync_client
-
-# Define your LangGraph workflow
-def my_workflow(input_data):
-    # ... your workflow logic ...
-    return result
-
-svc = bentoml.Service("langgraph_agent", runners=[my_workflow])
-
-@svc.api(input=bentoml.io.JSON(), output=bentoml.io.JSON())
-def run_workflow(input_data):
-    return my_workflow(input_data)
+```json
+// langgraph.json — declares your app for LangGraph Server
+{
+  "dependencies": ["."],
+  "graphs": {
+    "agent": "./my_app/graph.py:graph"
+  },
+  "env": ".env"
+}
 ```
 
-Deploy this service to BentoCloud or your own infrastructure.
+```bash
+# Local development server with LangGraph Studio
+pip install -U "langgraph-cli[inmem]"
+langgraph dev
+
+# Build a production Docker image for self-hosted LangGraph Server
+langgraph build -t my-langgraph-app
+```
+
+```python
+# Alternative: self-host by wrapping the compiled graph in your own FastAPI
+# service backed by a Postgres checkpointer
+from fastapi import FastAPI
+from langgraph.checkpoint.postgres import PostgresSaver
+from my_app.graph import builder
+
+app = FastAPI()
+
+with PostgresSaver.from_conn_string("postgresql://user:pass@host/db") as checkpointer:
+    checkpointer.setup()
+    graph = builder.compile(checkpointer=checkpointer)
+
+@app.post("/run")
+async def run_workflow(payload: dict):
+    config = {"configurable": {"thread_id": payload["thread_id"]}}
+    return await graph.ainvoke(payload["input"], config)
+```
+
+Deploy via LangSmith Deployment (managed) or to your own infrastructure (Docker/Kubernetes).
 
 ---
 

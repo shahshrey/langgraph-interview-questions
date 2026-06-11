@@ -22,39 +22,43 @@ A **hybrid workflow** that mixes LangGraph and LangChain nodes leverages the str
 ### **2. Example Structure**
 
 ```python
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import StateGraph, START, END, MessagesState
 from langchain.agents import create_agent
-from langchain.tools import Tool
+from langchain_core.tools import tool
 
 # Define a LangChain tool
-search_tool = Tool(name="search", func=search_func, description="Web search tool")
+@tool
+def search(query: str) -> str:
+    """Web search tool."""
+    return run_web_search(query)
 
-# Create a LangChain agent
-agent = create_agent(tools=[search_tool], llm=llm)
+# Create a LangChain agent (itself a compiled LangGraph graph)
+agent = create_agent(model="openai:gpt-4o", tools=[search])
 
-# Define LangGraph nodes
-def preprocess_node(state):
+# Define LangGraph nodes (each returns a partial state update)
+def preprocess_node(state: MessagesState):
     # Custom preprocessing logic
-    return state
+    return {}
 
-def agent_node(state):
+def agent_node(state: MessagesState):
     # Use the LangChain agent as a node
-    return agent.invoke(state)
+    result = agent.invoke({"messages": state["messages"]})
+    return {"messages": result["messages"]}
 
-def postprocess_node(state):
+def postprocess_node(state: MessagesState):
     # Custom postprocessing logic
-    return state
+    return {}
 
 # Build the LangGraph workflow
-graph = StateGraph()
-graph.add_node("preprocess", preprocess_node)
-graph.add_node("agent", agent_node)
-graph.add_node("postprocess", postprocess_node)
-graph.add_edge(START, "preprocess")
-graph.add_edge("preprocess", "agent")
-graph.add_edge("agent", "postprocess")
-graph.add_edge("postprocess", END)
-workflow = graph.compile()
+builder = StateGraph(MessagesState)
+builder.add_node("preprocess", preprocess_node)
+builder.add_node("agent", agent_node)
+builder.add_node("postprocess", postprocess_node)
+builder.add_edge(START, "preprocess")
+builder.add_edge("preprocess", "agent")
+builder.add_edge("agent", "postprocess")
+builder.add_edge("postprocess", END)
+workflow = builder.compile()
 ```
 
 - Here, `agent_node` is a LangGraph node that wraps a LangChain agent, while other nodes can be custom logic or other LangChain components.

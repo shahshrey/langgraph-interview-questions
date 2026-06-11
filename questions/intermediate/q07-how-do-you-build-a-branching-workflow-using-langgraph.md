@@ -21,34 +21,33 @@ LangGraph is a Python library designed for building complex, dynamic AI workflow
 
 #### **1. Define the State**
 
-Create a class or dictionary to hold the workflow’s state. This state will be updated and checked at each node.
+Define a schema (typically a `TypedDict`) that holds the workflow’s state. This state will be updated and checked at each node.
 
 ```python
-class MyState:
-    def __init__(self, user_input):
-        self.user_input = user_input
-        self.result = None
+from typing_extensions import TypedDict
+
+class MyState(TypedDict):
+    user_input: int
+    result: str
 ```
 
 #### **2. Define Nodes (Functions)**
 
-Each node is a function that takes the state as input and may update it.
+Each node is a function that takes the state as input and returns a partial state update.
 
 ```python
-def check_input(state):
-    if state.user_input > 5:
-        state.result = "win"
-    else:
-        state.result = "lose"
-    return state
+def check_input(state: MyState):
+    if state["user_input"] > 5:
+        return {"result": "win"}
+    return {"result": "lose"}
 
-def win_node(state):
+def win_node(state: MyState):
     print("You win!")
-    return state
+    return {}
 
-def lose_node(state):
+def lose_node(state: MyState):
     print("You lose!")
-    return state
+    return {}
 ```
 
 #### **3. Build the Graph and Add Nodes**
@@ -56,21 +55,26 @@ def lose_node(state):
 Use LangGraph’s `StateGraph` to add nodes and define the workflow.
 
 ```python
-from langgraph import StateGraph
+from langgraph.graph import StateGraph, START, END
 
-graph = StateGraph(MyState)
-graph.add_node("check_input", check_input)
-graph.add_node("win", win_node)
-graph.add_node("lose", lose_node)
+builder = StateGraph(MyState)
+builder.add_node("check_input", check_input)
+builder.add_node("win", win_node)
+builder.add_node("lose", lose_node)
+builder.add_edge(START, "check_input")
 ```
 
 #### **4. Add Conditional Edges for Branching**
 
-Define edges that branch based on the state.
+Define a routing function and attach it with `add_conditional_edges` to branch based on the state.
 
 ```python
-graph.add_edge("check_input", "win", condition=lambda s: s.result == "win")
-graph.add_edge("check_input", "lose", condition=lambda s: s.result == "lose")
+def route_result(state: MyState):
+    return state["result"]  # "win" or "lose"
+
+builder.add_conditional_edges("check_input", route_result, {"win": "win", "lose": "lose"})
+builder.add_edge("win", END)
+builder.add_edge("lose", END)
 ```
 
 #### **5. Compile and Run**
@@ -78,9 +82,8 @@ graph.add_edge("check_input", "lose", condition=lambda s: s.result == "lose")
 Compile the graph and execute it with an initial state.
 
 ```python
-workflow = graph.compile()
-initial_state = MyState(user_input=7)
-workflow.run(initial_state)
+workflow = builder.compile()
+final_state = workflow.invoke({"user_input": 7})
 ```
 
 ---

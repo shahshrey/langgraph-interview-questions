@@ -26,36 +26,45 @@ LangGraph is a powerful open-source framework designed to enable complex decisio
 
 ### **Code Example**
 
-Here’s a simplified conceptual example (Python-like pseudocode):
+Here’s a simplified example:
 
 ```python
-import langgraph
+from typing_extensions import TypedDict
+from langgraph.graph import StateGraph, START, END
+
+class State(TypedDict):
+    risk: float
+    result: str
 
 # Define nodes as functions or LLM calls
-def gather_info(state):
+def gather_info(state: State):
     # ... logic ...
-    return updated_state
+    return {"risk": 0.7}
 
-def decide_action(state):
-    if state['risk'] > 0.5:
-        return 'escalate'
-    else:
-        return 'proceed'
-
-def escalate(state):
+def proceed(state: State):
     # ... logic ...
-    return updated_state
+    return {"result": "handled automatically"}
+
+def escalate(state: State):
+    # ... logic ...
+    return {"result": "escalated to human"}
+
+# Routing function (decision point)
+def decide_action(state: State) -> str:
+    return "escalate" if state["risk"] > 0.5 else "proceed"
 
 # Build the graph
-graph = langgraph.Graph()
-graph.add_node('gather_info', gather_info)
-graph.add_node('decide_action', decide_action)
-graph.add_node('escalate', escalate)
+builder = StateGraph(State)
+builder.add_node("gather_info", gather_info)
+builder.add_node("proceed", proceed)
+builder.add_node("escalate", escalate)
 
-# Define edges (decision points)
-graph.add_edge('gather_info', 'decide_action')
-graph.add_edge('decide_action', 'proceed', condition=lambda s: s['risk'] <= 0.5)
-graph.add_edge('decide_action', 'escalate', condition=lambda s: s['risk'] > 0.5)
+builder.add_edge(START, "gather_info")
+builder.add_conditional_edges("gather_info", decide_action, ["proceed", "escalate"])
+builder.add_edge("proceed", END)
+builder.add_edge("escalate", END)
+
+graph = builder.compile()
 ```
 
 ---

@@ -35,41 +35,56 @@ A retail company wants to automate customer support for product recommendations 
 #### **Code Example (Python, Pseudocode)**
 
 ```python
-import langgraph
+from typing_extensions import TypedDict
+from langgraph.graph import StateGraph, START, END
 
-# Define nodes
-def detect_intent(input, memory):
+class SupportState(TypedDict):
+    user_input: str
+    intent: str
+    resolved: bool
+    response: str
+
+# Define nodes (each returns a partial state update)
+def detect_intent(state: SupportState):
     # Use LLM to classify intent
-    ...
+    return {"intent": classify(state["user_input"])}
 
-def recommend_product(input, memory):
+def recommend_product(state: SupportState):
     # Query product DB, ask clarifying questions
     ...
 
-def track_order(input, memory):
+def track_order(state: SupportState):
     # Query order system
     ...
 
-def escalate(input, memory):
+def escalate(state: SupportState):
     # Route to human or create ticket
     ...
 
+# Routing functions for conditional edges
+def route_intent(state: SupportState) -> str:
+    return "recommend" if state["intent"] == "product_search" else "track"
+
+def check_resolution(state: SupportState) -> str:
+    return END if state["resolved"] else "escalate"
+
 # Build the graph
-graph = langgraph.Graph()
-graph.add_node("intent", detect_intent)
-graph.add_node("recommend", recommend_product)
-graph.add_node("track", track_order)
-graph.add_node("escalate", escalate)
+builder = StateGraph(SupportState)
+builder.add_node("intent", detect_intent)
+builder.add_node("recommend", recommend_product)
+builder.add_node("track", track_order)
+builder.add_node("escalate", escalate)
 
 # Define transitions
-graph.add_edge("intent", "recommend", condition="intent:product_search")
-graph.add_edge("intent", "track", condition="intent:order_status")
-graph.add_edge("recommend", "escalate", condition="frustration_detected")
-graph.add_edge("track", "escalate", condition="unresolved")
-# ... more edges as needed
+builder.add_edge(START, "intent")
+builder.add_conditional_edges("intent", route_intent, ["recommend", "track"])
+builder.add_conditional_edges("recommend", check_resolution, ["escalate", END])
+builder.add_conditional_edges("track", check_resolution, ["escalate", END])
+builder.add_edge("escalate", END)
 
-# Run the workflow
-result = graph.run(user_input)
+# Compile and run the workflow
+graph = builder.compile()
+result = graph.invoke({"user_input": user_input})
 ```
 
 #### **Best Practices**
@@ -92,9 +107,9 @@ result = graph.run(user_input)
 ---
 
 **References:**  
-- [LangGraph Retail Example (LangChain Blog)](https://blog.langchain.dev/introducing-langgraph/)
-- [LangGraph Documentation: Use Cases](https://langchain-ai.github.io/langgraph/use_cases/)
-- [LangGraph GitHub: Customer Service Example](https://github.com/langchain-ai/langgraph/tree/main/examples/customer_service)
+- [LangGraph Documentation: Graph API](https://docs.langchain.com/oss/python/langgraph/graph-api)
+- [LangGraph Documentation: Workflows and Agents](https://docs.langchain.com/oss/python/langgraph/workflows-agents)
+- [LangChain Academy: Customer Support Agent Examples](https://academy.langchain.com/)
 
 LangGraph’s graph-based approach makes it ideal for orchestrating complex, stateful workflows in retail and customer service scenarios.
 

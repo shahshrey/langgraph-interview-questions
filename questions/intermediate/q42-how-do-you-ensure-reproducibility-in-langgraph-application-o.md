@@ -22,13 +22,16 @@ Reproducibility is a key concern when building agent-based applications with Lan
 - Use LangGraph’s built-in checkpointing mechanisms (e.g., `InMemorySaver`, or persistent savers for production) to save the state at each step. This allows you to replay or resume workflows from any point, ensuring that outputs can be traced and reproduced.
 - Example:
   ```python
-  from langgraph_supervisor import create_supervisor, InMemorySaver
+  from langchain.chat_models import init_chat_model
+  from langgraph.checkpoint.memory import InMemorySaver
+  from langgraph_supervisor import create_supervisor
 
   supervisor = create_supervisor(
-      model="openai:o3-pro",
       agents=[agent1, agent2],
+      model=init_chat_model("openai:gpt-4o"),  # pin an exact model version
       prompt="System prompt...",
-      checkpoint_saver=InMemorySaver(),  # For reproducibility, use a persistent saver in production
+  ).compile(
+      checkpointer=InMemorySaver(),  # For production, use a persistent saver (e.g., PostgresSaver)
   )
   ```
 
