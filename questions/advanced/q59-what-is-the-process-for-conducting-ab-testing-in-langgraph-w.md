@@ -37,33 +37,40 @@
 Suppose you want to test two prompt templates for a summarization agent:
 
 ```python
-from langgraph.graph import State, Graph
+import random
+from typing_extensions import TypedDict
+from langgraph.graph import StateGraph, START, END
 
-class SummarizationState(State):
+class SummarizationState(TypedDict):
     input_text: str
     output: str
     variant: str
 
-def prompt_a(state):
+def random_assign(state: SummarizationState):
+    return {"variant": random.choice(["A", "B"])}
+
+def prompt_a(state: SummarizationState):
     # Use prompt template A
-    ...
+    return {"output": "..."}
 
-def prompt_b(state):
+def prompt_b(state: SummarizationState):
     # Use prompt template B
-    ...
+    return {"output": "..."}
 
-def random_assign(state):
-    import random
-    state.variant = random.choice(['A', 'B'])
-    return state
+def route_variant(state: SummarizationState) -> str:
+    return state["variant"]
 
-graph = Graph()
-graph.add_node('assign', random_assign)
-graph.add_node('A', prompt_a)
-graph.add_node('B', prompt_b)
+builder = StateGraph(SummarizationState)
+builder.add_node("assign", random_assign)
+builder.add_node("A", prompt_a)
+builder.add_node("B", prompt_b)
 
-graph.add_edge('assign', 'A', condition=lambda s: s.variant == 'A')
-graph.add_edge('assign', 'B', condition=lambda s: s.variant == 'B')
+builder.add_edge(START, "assign")
+builder.add_conditional_edges("assign", route_variant, {"A": "A", "B": "B"})
+builder.add_edge("A", END)
+builder.add_edge("B", END)
+
+graph = builder.compile()
 ```
 
 - Each run is randomly assigned to either prompt A or B.
@@ -76,6 +83,7 @@ graph.add_edge('assign', 'B', condition=lambda s: s.variant == 'B')
 - **Ensure Randomization**: Use robust random assignment to avoid bias.
 - **Log Sufficient Data**: Capture not just outputs, but also metadata (timestamps, user IDs, etc.) for deeper analysis.
 - **Statistical Rigor**: Use appropriate statistical tests to validate results.
+- **Use LangSmith for Evaluation**: LangSmith (the first-party observability/evaluation platform) supports datasets, experiments, and side-by-side comparisons, making it a natural place to run and analyze A/B tests over LangGraph workflows.
 - **Monitor for Drift**: If running long-term, monitor for changes in user population or input distribution.
 
 ---

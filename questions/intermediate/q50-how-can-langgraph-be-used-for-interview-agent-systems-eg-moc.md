@@ -18,7 +18,7 @@ LangGraph is highly effective for building interview agent systems, such as mock
 
 **3. Customizable Control Flow**
 - You can design complex interview flows, such as branching based on candidate responses, looping for follow-up questions, or escalating to a human reviewer if needed.
-- LangGraph’s visual and code-based graph design makes it easy to prototype and debug these flows.
+- LangGraph’s code-based graph design (with LangGraph Studio for visualization and debugging) makes it easy to prototype and debug these flows.
 
 ---
 
@@ -27,36 +27,37 @@ LangGraph is highly effective for building interview agent systems, such as mock
 A typical setup might look like this (based on the [Twilio WhatsApp + LangGraph example](https://www.twilio.com/en-us/blog/developers/community/build-a-mock-interview-agent-using-twilio-whatsapp-api--langgrap) and [Medium tutorial](https://medium.com/@maxforsamp98/building-an-ai-interviewer-agent-with-google-gemini-and-langgraph-c752e0ae65f3)):
 
 ```python
-from langgraph.prebuilt import create_react_agent
-from langchain_openai import ChatOpenAI
+from langchain.agents import create_agent
+from langchain.chat_models import init_chat_model
 from langchain_core.tools import tool
-from langchain.prompts import PromptTemplate
+from langgraph.checkpoint.memory import InMemorySaver
 
 # Define your interview questions and evaluation tools
 @tool
-def select_question(state):
-    # Logic to select the next question based on state
+def select_question(topic: str, difficulty: str) -> str:
+    """Select the next interview question for a topic and difficulty."""
     ...
 
 @tool
-def evaluate_answer(state):
-    # Logic to score or give feedback on the answer
+def evaluate_answer(question: str, answer: str) -> str:
+    """Score or give feedback on the candidate's answer."""
     ...
 
-# Create the agent with tools and prompt
-graph = create_react_agent(
-    model=ChatOpenAI(),
+# Create the agent (returns a compiled LangGraph graph)
+graph = create_agent(
+    model=init_chat_model("openai:gpt-4o"),
     tools=[select_question, evaluate_answer],
-    prompt=PromptTemplate("You are a mock interviewer...")
+    system_prompt="You are a mock interviewer...",
+    checkpointer=InMemorySaver(),  # use Postgres/SQLite in production
 )
 
-# Manage user sessions and run the interview
-def run_interview(user_id, user_message, session_store):
-    session = session_store.get(user_id, [])
-    session.append(user_message)
-    response = graph.stream(session)
-    session_store[user_id] = session
-    return response
+# Manage user sessions via thread_id; the checkpointer persists history
+def run_interview(user_id, user_message):
+    config = {"configurable": {"thread_id": user_id}}
+    return graph.invoke(
+        {"messages": [{"role": "user", "content": user_message}]},
+        config,
+    )
 ```
 
 ---

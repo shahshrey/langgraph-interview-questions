@@ -16,30 +16,40 @@ LangGraph provides several options for visualizing graph structures, making it e
 
 **Example:**
 ```python
-from langgraph.graph import StateGraph
+from langgraph.graph import StateGraph, START, END
 
 # Build your graph
 builder = StateGraph(State)
-builder.add_node(node)
-builder.set_entry_point("node")
+builder.add_node("node", node)
+builder.add_edge(START, "node")
+builder.add_edge("node", END)
 graph = builder.compile()
 
 # Visualize as Mermaid code
-mermaid_code = graph.get_mermaid()
+mermaid_code = graph.get_graph().draw_mermaid()
 print(mermaid_code)
+
+# Or render directly to PNG bytes
+png_bytes = graph.get_graph().draw_mermaid_png()
 ```
 You can then paste the Mermaid code into an online Mermaid live editor to view the diagram.
 
 ---
 
-### **2. Third-Party Integrations**
+### **2. LangGraph Studio**
+
+- **Interactive IDE**: Running `langgraph dev` (from the `langgraph-cli` package) launches a local server with LangGraph Studio, which renders your graph visually and lets you step through runs, inspect state, and replay from checkpoints while debugging.
+
+---
+
+### **3. Third-Party Integrations**
 
 - **Laminar**: When using the Laminar tracing tool, LangGraph executions are automatically captured and visualized in the trace view, showing the full graph structure and node relationships.
 - **Langfuse**: Langfuse provides a "graph view" for LangGraph traces, allowing you to step through execution spans and see the conceptual agent graph.
 
 ---
 
-### **3. Real-World Example**
+### **4. Real-World Example**
 
 - **Debugging Multi-Agent Workflows**: When building a multi-step research agent, you can use LangGraph’s visualization to see how data and control flow between nodes, making it easier to spot logic errors or optimize the workflow.
 - **Documentation and Communication**: Exporting Mermaid diagrams or PNGs helps teams discuss and document AI workflow logic.
@@ -75,6 +85,7 @@ You can then paste the Mermaid code into an online Mermaid live editor to view t
 | Visualization Option | Description | Output Format |
 |---------------------|-------------|--------------|
 | Built-in Utilities  | Visualize with Mermaid, PNG, ASCII | Mermaid code, PNG, ASCII |
+| LangGraph Studio    | Interactive graph view and run debugging (`langgraph dev`) | Interactive UI |
 | Laminar             | Trace and visualize execution | Interactive UI |
 | Langfuse            | Graph view for traces | Interactive UI |
 

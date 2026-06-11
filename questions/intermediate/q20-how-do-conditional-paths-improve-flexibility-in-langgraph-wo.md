@@ -21,15 +21,18 @@
 A simple conditional node in LangGraph might look like:
 
 ```python
-def check_query(state):
+def route_query(state):
     if "refund" in state["user_query"]:
         return "handle_refund"
     else:
         return "handle_general"
 
-graph.add_node("check_query", check_query)
-graph.add_edge("check_query", "handle_refund", condition=lambda state: "refund" in state["user_query"])
-graph.add_edge("check_query", "handle_general", condition=lambda state: "refund" not in state["user_query"])
+builder.add_node("check_query", check_query)
+builder.add_conditional_edges(
+    "check_query",
+    route_query,
+    ["handle_refund", "handle_general"],
+)
 ```
 
 **Best Practices**

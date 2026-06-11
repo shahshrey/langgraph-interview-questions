@@ -57,16 +57,17 @@ Here are the best strategies for organizing code in large LangGraph projects, ba
 
 ```python
 # nodes/planner.py
-from typing import TypedDict
+from typing_extensions import TypedDict
 
 class PlannerState(TypedDict):
     question: str
     sub_questions: list[str]
 
-def planner_node(state: PlannerState) -> PlannerState:
+def planner_node(state: PlannerState) -> dict:
     # Logic to break down the question into sub-questions
-    ...
-    return updated_state
+    sub_questions = plan(state["question"])
+    # Return only the keys being updated (partial state update)
+    return {"sub_questions": sub_questions}
 ```
 
 ```python

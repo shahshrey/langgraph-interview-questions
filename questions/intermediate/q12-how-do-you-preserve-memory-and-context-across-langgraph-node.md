@@ -23,22 +23,23 @@
 **Code Example**
 
 ```python
-from langgraph.graph import StateGraph
+from typing_extensions import TypedDict
+from langgraph.graph import StateGraph, START, END
 
 class MemoryState(TypedDict):
     input: str
     history: str
 
-def process_input(state: MemoryState) -> MemoryState:
+def process_input(state: MemoryState):
     user_input = state['input']
     prev_history = state.get('history', '')
     new_history = prev_history + "\n" + user_input
-    return {"input": user_input, "history": new_history}
+    return {"history": new_history}
 
 builder = StateGraph(MemoryState)
 builder.add_node("input_handler", process_input)
-builder.set_entry_point("input_handler")
-builder.add_edge("input_handler", "END")
+builder.add_edge(START, "input_handler")
+builder.add_edge("input_handler", END)
 graph = builder.compile()
 
 # Each invocation preserves and updates the context

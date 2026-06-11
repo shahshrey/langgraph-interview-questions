@@ -27,23 +27,28 @@
 ### Code Example: State in LangGraph
 
 ```python
-from langgraph.graph import StateGraph, END
+from typing import Annotated
+from typing_extensions import TypedDict
 
-class MessagesState(TypedDict):
-    messages: list[AnyMessage]
+from langchain_core.messages import AnyMessage
+from langgraph.graph import StateGraph, START, END, add_messages
+
+class State(TypedDict):
+    messages: Annotated[list[AnyMessage], add_messages]
     llm_calls: int
 
-def llm_call(state: dict):
+def llm_call(state: State):
     # LLM decides next action based on current state
     return {
-        "messages": [...],  # updated message history
-        "llm_calls": state.get('llm_calls', 0) + 1
+        "messages": [...],  # new messages are appended by the reducer
+        "llm_calls": state.get("llm_calls", 0) + 1
     }
 
-workflow = StateGraph(MessagesState)
-workflow.add_node("llm_call", llm_call)
-workflow.set_entry_point("llm_call")
-workflow.add_edge("llm_call", END)
+builder = StateGraph(State)
+builder.add_node("llm_call", llm_call)
+builder.add_edge(START, "llm_call")
+builder.add_edge("llm_call", END)
+graph = builder.compile()
 ```
 *Here, the state (including conversation history) is explicitly passed and updated at each step.*
 
@@ -52,7 +57,7 @@ workflow.add_edge("llm_call", END)
 ### Best Practices
 
 - **Explicit State Modeling**: Define all relevant conversation/context variables in your state object.
-- **Immutable State Updates**: Always return a new state object from each node to avoid side effects.
+- **Immutable State Updates**: Return partial update dicts from each node rather than mutating state in place; reducers merge updates into the state.
 - **Leverage Graph Flexibility**: Use LangGraph’s graph structure to model loops, retries, and conditional flows that are common in conversations.
 
 ---

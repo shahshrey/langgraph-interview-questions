@@ -55,25 +55,33 @@
 ## Code Example (Simplified)
 
 ```python
-from langgraph.graph import StateGraph, END
-from langchain_community.vectorstores import Chroma
+from typing_extensions import TypedDict
+from langgraph.graph import StateGraph, START, END
+from langchain_chroma import Chroma
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-# Define retrieval and generation nodes
-def retrieve_node(state):
-    # Retrieve relevant documents
-    ...
+class RAGState(TypedDict):
+    question: str
+    documents: list
+    answer: str
 
-def generate_node(state):
+# Define retrieval and generation nodes (return partial state updates)
+def retrieve_node(state: RAGState):
+    # Retrieve relevant documents
+    return {"documents": ...}
+
+def generate_node(state: RAGState):
     # Generate answer using retrieved context
-    ...
+    return {"answer": ...}
 
 # Build the workflow graph
-graph = StateGraph()
-graph.add_node("retrieve", retrieve_node)
-graph.add_node("generate", generate_node)
-graph.add_edge("retrieve", "generate")
-graph.add_edge("generate", END)
+builder = StateGraph(RAGState)
+builder.add_node("retrieve", retrieve_node)
+builder.add_node("generate", generate_node)
+builder.add_edge(START, "retrieve")
+builder.add_edge("retrieve", "generate")
+builder.add_edge("generate", END)
+graph = builder.compile()
 ```
 
 ---

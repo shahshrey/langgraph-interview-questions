@@ -27,23 +27,42 @@
 
 5. **Batching and Caching**
    - **Batch Requests:** Where possible, batch similar LLM or API requests together to reduce overhead.
-   - **Cache Results:** Cache outputs of deterministic nodes or expensive LLM calls to avoid redundant computation.
+   - **Cache Results:** Cache outputs of deterministic nodes or expensive LLM calls to avoid redundant computation. LangGraph supports node-level caching natively via `CachePolicy` (e.g., `builder.add_node("expensive", fn, cache_policy=CachePolicy(ttl=120))` with a cache passed to `compile()`).
 
 **Code Example: Parallel Execution in LangGraph**
 ```python
-from langgraph.graph import StateGraph
+import operator
+from typing import Annotated
+from typing_extensions import TypedDict
+from langgraph.graph import StateGraph, START, END
 
-def fetch_data_a(state): ...
-def fetch_data_b(state): ...
-def aggregate_results(state): ...
+class State(TypedDict):
+    # A reducer is required so parallel branches can both write to this key
+    results: Annotated[list, operator.add]
 
-graph = StateGraph()
-graph.add_node("fetch_a", fetch_data_a)
-graph.add_node("fetch_b", fetch_data_b)
-graph.add_node("aggregate", aggregate_results)
+def fetch_data_a(state: State):
+    return {"results": ["data_a"]}
 
-# Run fetch_a and fetch_b in parallel, then aggregate
-graph.add_parallel(["fetch_a", "fetch_b"], next_node="aggregate")
+def fetch_data_b(state: State):
+    return {"results": ["data_b"]}
+
+def aggregate_results(state: State):
+    return {"results": [f"aggregated: {state['results']}"]}
+
+builder = StateGraph(State)
+builder.add_node("fetch_a", fetch_data_a)
+builder.add_node("fetch_b", fetch_data_b)
+builder.add_node("aggregate", aggregate_results)
+
+# Fan out from START to run fetch_a and fetch_b in parallel, then aggregate
+builder.add_edge(START, "fetch_a")
+builder.add_edge(START, "fetch_b")
+builder.add_edge("fetch_a", "aggregate")
+builder.add_edge("fetch_b", "aggregate")
+builder.add_edge("aggregate", END)
+
+graph = builder.compile()
+result = graph.invoke({"results": []})
 ```
 
 **Best Practices**

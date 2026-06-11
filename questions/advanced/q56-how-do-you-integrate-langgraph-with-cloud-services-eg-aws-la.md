@@ -20,17 +20,20 @@
 
 - **Direct Invocation as a Tool:**  
   LangGraph (via LangChain) can invoke AWS Lambda functions as part of an agent's toolset. This is typically done by configuring a Lambda tool with the function name, region, and AWS credentials.
-- **Example (JavaScript, LangChain):**
+- **Example (JavaScript, LangChain community tools):**
   ```js
-  import { AWSLambda } from "langchain/tools/aws_lambda";
+  import { AWSLambda } from "@langchain/community/tools/aws_lambda";
   const lambdaTool = new AWSLambda({
+    name: "email-sender",
+    description: "Sends an email via SES. Input should be the email body.",
     functionName: "SendEmailViaSES",
     region: "us-east-1",
-    accessKeyId: "YOUR_ACCESS_KEY",
-    secretAccessKey: "YOUR_SECRET_KEY"
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   });
   // Add lambdaTool to your agent's tools
   ```
+  In Python, you can equivalently define a custom `@tool` (from `langchain_core.tools`) that calls `boto3.client("lambda").invoke(...)` and bind it to your LangGraph agent.
   - See: [LangChain Lambda Integration Docs](https://docs.langchain.com/oss/javascript/integrations/tools/lambda_agent)
 
 - **Best Practices:**
@@ -45,13 +48,16 @@
 - **Example (Python, FastAPI):**
   ```python
   from fastapi import FastAPI
-  from langserve import add_routes
-  from my_graph import graph as langgraph_app
+  from my_graph import graph  # a compiled LangGraph graph
 
   app = FastAPI()
-  add_routes(app, langgraph_app)
+
+  @app.post("/invoke")
+  async def invoke(payload: dict):
+      config = {"configurable": {"thread_id": payload["thread_id"]}}
+      return await graph.ainvoke({"messages": payload["messages"]}, config)
   ```
-  - Deploy this app to Cloud Run or GCP Functions.
+  - Deploy this app to Cloud Run or GCP Functions. Alternatively, run LangGraph Server (built with `langgraph build` from your `langgraph.json`) as the container on Cloud Run.
   - See: [LangGraph + Cloud Run Example](https://smarttechnotes.com/langgraph-cloudrun/)
 
 - **Best Practices:**

@@ -18,25 +18,28 @@
 
 **Code Example (Conceptual):**
 ```python
-import langgraph
+from langgraph.graph import StateGraph, START, END
 
-# Define nodes for each step in the workflow
-def retrieve_info(context):
+# Define nodes for each step in the workflow (each returns a partial state update)
+def retrieve_info(state: State):
     # Autonomous decision: what info to fetch
     ...
 
-def summarize(context):
+def summarize(state: State):
     # Autonomous summarization logic
     ...
 
 # Build the workflow graph
-graph = langgraph.Graph()
-graph.add_node("retrieve", retrieve_info)
-graph.add_node("summarize", summarize)
-graph.add_edge("retrieve", "summarize")
+builder = StateGraph(State)
+builder.add_node("retrieve", retrieve_info)
+builder.add_node("summarize", summarize)
+builder.add_edge(START, "retrieve")
+builder.add_edge("retrieve", "summarize")
+builder.add_edge("summarize", END)
+graph = builder.compile()
 
 # Run the agentic workflow
-result = graph.run(start_node="retrieve", input_data=...)
+result = graph.invoke({"query": ...})
 ```
 
 **Best Practices:**

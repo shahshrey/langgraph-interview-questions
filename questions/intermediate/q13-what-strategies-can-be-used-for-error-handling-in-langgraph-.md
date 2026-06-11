@@ -38,6 +38,8 @@ LangGraph provides a flexible, graph-based approach to building LLM-powered work
 ### **Code Example: Node-Level Error Handling and Retry**
 
 ```python
+from langgraph.types import RetryPolicy
+
 def tool_node(state):
     try:
         # Attempt risky operation
@@ -47,8 +49,12 @@ def tool_node(state):
         # Update state with error info
         return {"error": {"type": "APIError", "message": str(e)}}
 
-# Adding retry logic (pseudo-code)
-builder.add_node("tool_node", tool_node, retry_policy={"max_retries": 3, "delay": 2})
+# Adding retry logic with LangGraph's built-in RetryPolicy
+builder.add_node(
+    "tool_node",
+    tool_node,
+    retry_policy=RetryPolicy(max_attempts=3, initial_interval=2.0),
+)
 ```
 
 ---

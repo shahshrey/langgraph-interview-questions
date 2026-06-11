@@ -9,40 +9,47 @@
 ### Key Data Structures in LangGraph Nodes and Edges
 
 #### 1. **State (Dictionary/Schema)**
-- **Nodes** in LangGraph operate on a shared state, which is typically represented as a Python dictionary or a custom schema (often a dataclass or Pydantic model).
+- **Nodes** in LangGraph operate on a shared state, which is defined by a schema — most commonly a `TypedDict`, but a Pydantic model or dataclass also works.
 - This state holds all the information that needs to be passed between nodes, such as user input, intermediate results, or context.
 - The schema ensures that the data structure is consistent and interpretable across all nodes and edges.
 - Example:
   ```python
-  from typing import Dict, Any
+  import operator
+  from typing import Annotated
+  from typing_extensions import TypedDict
 
-  state = {
-      "messages": ["Hello!"],
-      "user_id": 123,
-      "context": {}
-  }
+  class State(TypedDict):
+      messages: Annotated[list, operator.add]  # reducer: appends instead of overwriting
+      user_id: int
+      context: dict
   ```
 
 #### 2. **Nodes (Functions or Callables)**
-- Each node is usually a function or callable object that takes the current state as input and returns an updated state.
-- Nodes are often stored in a dictionary or as attributes in a class, mapping node names to their corresponding functions.
+- Each node is usually a function or callable object that takes the current state as input and returns a **partial update** dict, which LangGraph merges into the state (using any reducers defined on the schema).
+- Nodes are registered on the graph builder by name with `add_node`.
 - Example:
   ```python
-  def greet_node(state: Dict[str, Any]) -> Dict[str, Any]:
-      state["messages"].append("How can I help you?")
-      return state
+  def greet_node(state: State) -> dict:
+      return {"messages": ["How can I help you?"]}
   ```
 
-#### 3. **Edges (Mappings/Transitions)**
-- **Edges** define the possible transitions between nodes, often represented as a mapping (dictionary) from one node to the next, or as a set of rules/conditions.
-- In more advanced workflows, edges can be functions that determine the next node based on the current state (dynamic routing).
+#### 3. **Edges (Transitions)**
+- **Edges** define the possible transitions between nodes. Static edges are declared with `add_edge`, while conditional (dynamic) routing uses `add_conditional_edges` with a routing function that inspects the current state and returns the name of the next node.
 - Example:
   ```python
-  edges = {
-      "start": "greet_node",
-      "greet_node": "process_input",
-      "process_input": lambda state: "end" if state["done"] else "greet_node"
-  }
+  from langgraph.graph import StateGraph, START, END
+
+  builder = StateGraph(State)
+  builder.add_node("greet_node", greet_node)
+  builder.add_node("process_input", process_input)
+  builder.add_edge(START, "greet_node")
+  builder.add_edge("greet_node", "process_input")
+  builder.add_conditional_edges(
+      "process_input",
+      lambda state: END if state["context"].get("done") else "greet_node",
+      ["greet_node", END],
+  )
+  graph = builder.compile()
   ```
 
 ---

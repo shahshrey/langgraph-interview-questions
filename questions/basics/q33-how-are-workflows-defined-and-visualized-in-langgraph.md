@@ -11,40 +11,48 @@
     - Edges: Define the transitions or flow between tasks, allowing for dynamic and stateful execution.
 
 - **Visualization**: LangGraph provides built-in visualization tools to help users understand and debug their workflows. These tools can generate graphical representations (such as PNG images) of the workflow graph, making it easier to see the structure and flow at a glance.
-    - LangGraph Studio: A visual interface (IDE) that allows users to design, build, and share workflows using a drag-and-drop graphical editor, without writing code.
-    - Programmatic Visualization: The Python library includes methods (e.g., `get_graph`) to export and visualize the workflow graph directly from code.
+    - LangGraph Studio: A visualization and debugging IDE that renders your graph, lets you step through runs, inspect state, and replay from checkpoints. Note that it is not a low-code authoring tool — graphs are still defined in code.
+    - Programmatic Visualization: The Python library includes methods (e.g., `get_graph()` with `draw_mermaid()` / `draw_mermaid_png()`) to export and visualize the workflow graph directly from code.
 
 **Code Example**
 
 Here’s a simplified example of defining and visualizing a workflow in LangGraph (Python):
 
 ```python
-from langgraph import StateGraph
+from typing_extensions import TypedDict
+from langgraph.graph import StateGraph, START, END
 
-# Define node functions
-def greet(state):
-    print("Hello!")
-    return state
+class State(TypedDict):
+    messages: list
 
-def ask_question(state):
-    print("How can I help you?")
-    return state
+# Define node functions (each returns a partial state update)
+def greet(state: State) -> dict:
+    return {"messages": state["messages"] + ["Hello!"]}
+
+def ask_question(state: State) -> dict:
+    return {"messages": state["messages"] + ["How can I help you?"]}
 
 # Create the graph
-graph = StateGraph()
-graph.add_node("greet", greet)
-graph.add_node("ask", ask_question)
-graph.add_edge("greet", "ask")
+builder = StateGraph(State)
+builder.add_node("greet", greet)
+builder.add_node("ask", ask_question)
+builder.add_edge(START, "greet")
+builder.add_edge("greet", "ask")
+builder.add_edge("ask", END)
+graph = builder.compile()
 
 # Visualize the workflow
-graph.visualize("workflow.png")  # Exports a PNG image of the workflow
+print(graph.get_graph().draw_mermaid())  # Mermaid diagram source
+
+with open("workflow.png", "wb") as f:
+    f.write(graph.get_graph().draw_mermaid_png())  # PNG image of the workflow
 ```
 
 **Best Practices**
 
 - Use clear, descriptive names for nodes to make the workflow graph easy to understand.
 - Leverage visualization early in development to catch logical errors and optimize workflow structure.
-- For complex workflows, consider using LangGraph Studio for a no-code, collaborative design experience.
+- For complex workflows, use LangGraph Studio (via `langgraph dev`) to interactively visualize, debug, and step through your graph.
 
 **Common Pitfalls**
 
@@ -62,7 +70,7 @@ graph.visualize("workflow.png")  # Exports a PNG image of the workflow
 - [What is LangGraph? (IBM)](https://www.ibm.com/think/topics/langgraph)
 - [LangGraph Simplified (Medium)](https://medium.com/@Shamimw/langgraph-simplified-how-to-build-ai-workflows-the-smart-way-791c17749663)
 
-**Summary**: Workflows in LangGraph are defined as directed graphs of nodes and edges, enabling flexible, stateful, and dynamic execution. Visualization is supported both programmatically and via a dedicated visual IDE, making it easy to design, debug, and share complex AI workflows.
+**Summary**: Workflows in LangGraph are defined in code as directed graphs of nodes and edges, enabling flexible, stateful, and dynamic execution. Visualization is supported both programmatically (Mermaid/PNG via `get_graph()`) and via LangGraph Studio, making it easy to inspect, debug, and share complex AI workflows.
 
 ---
 

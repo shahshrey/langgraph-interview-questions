@@ -41,7 +41,7 @@
 #### 3. **Practical Evaluation Workflow**
 
 - **Unit Testing of Nodes:** Test each node (retrieval, grading, rewriting, generation) independently.
-- **Graph-Level Evaluation:** Use LangGraph’s evaluation tools (e.g., `evaluate()`/`aevaluate()`) to assess the entire workflow, including intermediate states.
+- **Graph-Level Evaluation:** Use LangSmith’s evaluation tools (`evaluate()`/`aevaluate()` from the `langsmith` SDK) to run the compiled graph against a dataset and score outputs; the open-source `agentevals` package provides prebuilt trajectory evaluators (e.g., LLM-as-judge, trajectory match) for agent runs.
 - **Logging and Tracing:** Integrate with tools like LangSmith or Langfuse for detailed tracing and error analysis.
 - **Adaptive Testing:** Simulate edge cases where the agent must adapt (e.g., ambiguous queries, missing context).
 
@@ -82,7 +82,8 @@ Suppose your LangGraph agentic RAG system includes:
 
 #### 6. **References & Further Reading**
 
-- [LangChain Docs: Evaluating Graphs](https://docs.langchain.com/langsmith/evaluate-graph)
+- [LangSmith Docs: Evaluate a Graph](https://docs.langchain.com/langsmith/evaluate-graph)
+- [agentevals: Evaluators for Agent Trajectories](https://github.com/langchain-ai/agentevals)
 - [Analytics Vidhya: Building Agentic RAG Systems with LangGraph](https://www.analyticsvidhya.com/blog/2024/07/building-agentic-rag-systems-with-langgraph/)
 - [Medium: Evaluating RAG Systems – Metrics and Best Practices](https://medium.com/@sahin.samia/evaluating-rag-systems-metrics-and-best-practices-906a2c209bb5)
 - [LevelUp: Building a Scalable, Production-Grade Agentic RAG Pipeline](https://levelup.gitconnected.com/building-a-scalable-production-grade-agentic-rag-pipeline-1168dcd36260)

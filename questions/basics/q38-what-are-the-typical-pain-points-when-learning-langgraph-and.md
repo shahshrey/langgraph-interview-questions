@@ -10,16 +10,16 @@
    - LangGraph requires thinking in terms of nodes, edges, and state transitions, which is different from the linear programming paradigm most developers are used to. This mental model shift can be challenging, especially for those new to graph-based workflows.
    - *Approach*: Start by building very simple graphs (one or two nodes) and gradually add complexity. Visualize your agent’s flow as a graph on paper or with diagram tools to internalize the structure.
 
-2. **Sparse Documentation and Examples**
-   - As a relatively new framework, LangGraph has fewer tutorials, examples, and community resources compared to more established tools. Documentation often jumps from basic to advanced topics, leaving a gap for intermediate learners.
-   - *Approach*: Seek out community forums, GitHub issues, and blog posts for real-world examples. When stuck, try to reproduce minimal working examples and incrementally add features. Contribute back by sharing your own findings to help grow the ecosystem.
+2. **Uneven Documentation and Outdated Examples**
+   - Official documentation has matured considerably, but many community tutorials and blog posts predate the 1.0 release and show old APIs. Documentation can also jump from basic to advanced topics, leaving a gap for intermediate learners.
+   - *Approach*: Prefer the official docs (https://docs.langchain.com/oss/python/langgraph/) over older blog posts. When stuck, reproduce minimal working examples and incrementally add features. Contribute back by sharing your own findings to help grow the ecosystem.
 
-3. **Async Programming Requirements**
-   - LangGraph expects all node functions to be asynchronous. Mixing synchronous and asynchronous code can lead to crashes or unpredictable behavior.
-   - *Approach*: Always define node functions as async and use `await` for any asynchronous operations. If you’re new to async programming in Python, review basic async/await patterns before diving into LangGraph.
+3. **Mixing Sync and Async Code**
+   - LangGraph supports both synchronous and asynchronous node functions, but mixing them incorrectly — e.g., calling `graph.invoke()` on a graph with async nodes, or forgetting that async graphs must be run with `await graph.ainvoke(...)` / `graph.astream(...)` — can cause errors or unpredictable behavior.
+   - *Approach*: Pick one style per graph where possible. If your nodes are async, run the graph with the async entry points (`ainvoke`, `astream`) and use `await` for any asynchronous operations. If you’re new to async programming in Python, review basic async/await patterns first.
 
 4. **Versioning and API Changes**
-   - Rapid development means that code examples online may not match the current version, leading to confusion and errors.
+   - The pre-1.0 era saw rapid API evolution, so many code examples online do not match the current stable 1.x API (e.g., `create_react_agent` is deprecated in favor of `create_agent`, and `MemorySaver` is now `InMemorySaver`).
    - *Approach*: Always check the version of LangGraph you’re using and refer to the corresponding documentation. If an example doesn’t work, look for changelogs or migration guides.
 
 5. **Designing Clear Node/Edge/State Structures**
@@ -33,12 +33,12 @@
 - Join the LangGraph or LangChain community for support and updates.
 
 **Common Pitfalls:**
-- Forgetting to make node functions async.
+- Mixing sync and async node/graph entry points incorrectly (e.g., forgetting `ainvoke` for async graphs).
 - Overcomplicating the initial graph design.
 - Copy-pasting code from outdated examples without checking compatibility.
 
 **Real-World Example:**
-A developer building a customer service bot with LangGraph struggled with async errors and unclear state transitions. By breaking the problem into smaller nodes, visualizing the flow, and ensuring all functions were async, they were able to debug and scale their agent more effectively.
+A developer building a customer service bot with LangGraph struggled with async errors and unclear state transitions. By breaking the problem into smaller nodes, visualizing the flow, and consistently using the async entry points (`ainvoke`/`astream`) with their async nodes, they were able to debug and scale their agent more effectively.
 
 **References:**
 - [LangSmith vs LangGraph: In-Depth Comparison - Leanware](https://www.leanware.co/insights/langsmith-vs-langgraph-in-depth-comparison)

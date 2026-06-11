@@ -33,17 +33,26 @@ A real-world scenario where LangGraph’s graph structure provides significant i
 ### Code Example (Simplified)
 
 ```python
+from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, START, END
 
-def billing_agent(state):
+class SupportState(TypedDict):
+    issue_type: str
+    response: str
+
+def billing_agent(state: SupportState):
     # handle billing queries
     ...
 
-def tech_agent(state):
+def tech_agent(state: SupportState):
     # handle technical queries
     ...
 
-def route_decision(state):
+def fallback(state: SupportState):
+    # escalate to a human or ask a clarifying question
+    ...
+
+def route_decision(state: SupportState) -> str:
     if state['issue_type'] == 'billing':
         return 'billing_agent'
     elif state['issue_type'] == 'technical':
@@ -51,12 +60,14 @@ def route_decision(state):
     else:
         return 'fallback'
 
-builder = StateGraph(dict)
+builder = StateGraph(SupportState)
 builder.add_node('billing_agent', billing_agent)
 builder.add_node('tech_agent', tech_agent)
-builder.add_conditional_edges(START, route_decision)
+builder.add_node('fallback', fallback)
+builder.add_conditional_edges(START, route_decision, ['billing_agent', 'tech_agent', 'fallback'])
 builder.add_edge('billing_agent', END)
 builder.add_edge('tech_agent', END)
+builder.add_edge('fallback', END)
 graph = builder.compile()
 ```
 

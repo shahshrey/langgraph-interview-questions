@@ -22,21 +22,29 @@
 ### Code Example (Python, simplified)
 
 ```python
-from langgraph.graph import StateGraph
+from typing_extensions import TypedDict
+from langgraph.graph import StateGraph, START, END
 
-def search_step(state):
+class ResearchState(TypedDict):
+    query: str
+    findings: str
+    summary: str
+
+def search_step(state: ResearchState):
     # Search for information
-    return updated_state
+    return {"findings": "..."}
 
-def summarize_step(state):
+def summarize_step(state: ResearchState):
     # Summarize findings
-    return updated_state
+    return {"summary": "..."}
 
-graph = StateGraph()
-graph.add_node("search", search_step)
-graph.add_node("summarize", summarize_step)
-graph.add_edge("search", "summarize")
-graph.set_entry_point("search")
+builder = StateGraph(ResearchState)
+builder.add_node("search", search_step)
+builder.add_node("summarize", summarize_step)
+builder.add_edge(START, "search")
+builder.add_edge("search", "summarize")
+builder.add_edge("summarize", END)
+graph = builder.compile()
 ```
 
 This example shows a simple research agent that first searches, then summarizes, but real-world graphs can include loops, branches, and conditional logic.

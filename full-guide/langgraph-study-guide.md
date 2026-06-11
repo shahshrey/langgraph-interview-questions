@@ -21,7 +21,7 @@
   - Designed for stateful, complex, and non-linear workflows, such as multi-agent systems or applications with branching, loops, and retries.
   - Each node in the graph represents an action (e.g., LLM call, database query), and edges define transitions based on outcomes.
   - Robust state management is a core feature, allowing nodes to access and modify shared state for context-aware behaviors.
-  - Often provides a visual, low-code interface for designing workflows, making it more accessible for users who prefer graphical design.
+  - Code-first by design; LangGraph Studio provides visualization and debugging of graphs you define in code (it is not a low-code or drag-and-drop builder).
 
 ---
 
@@ -29,26 +29,28 @@
 
 **LangChain (linear workflow):**
 ```python
-from langchain.chains import SimpleChain
+from langchain.chat_models import init_chat_model
 
-chain = SimpleChain([
-    step1,  # e.g., LLM call
-    step2,  # e.g., data retrieval
-    step3   # e.g., summarization
-])
-result = chain.run(input_data)
+model = init_chat_model("openai:gpt-4o-mini")
+
+# A simple linear pipeline: prompt -> model -> parsed output
+summary = model.invoke(f"Summarize the following text:\n\n{input_text}")
+result = summary.content
 ```
 
 **LangGraph (graph-based workflow):**
 ```python
-from langgraph import Graph, Node
+from langgraph.graph import StateGraph, START, END
 
-graph = Graph()
-graph.add_node(Node("start", start_action))
-graph.add_node(Node("decision", decision_action))
-graph.add_edge("start", "decision", condition=some_condition)
-graph.add_edge("decision", "end", condition=another_condition)
-result = graph.run(initial_state)
+builder = StateGraph(State)
+builder.add_node("start_step", start_action)
+builder.add_node("decision", decision_action)
+builder.add_edge(START, "start_step")
+builder.add_conditional_edges("start_step", route_after_start, ["decision", END])
+builder.add_edge("decision", END)
+
+graph = builder.compile()
+result = graph.invoke(initial_state)
 ```
 
 ---
@@ -115,27 +117,24 @@ class MathState(TypedDict):
     sum_result: float
     final_result: float
 
-# Define node functions
-async def add_numbers(state: MathState) -> MathState:
-    state["sum_result"] = state["num1"] + state["num2"]
-    return state
+# Define node functions (return partial state updates, not the full state)
+def add_numbers(state: MathState) -> dict:
+    return {"sum_result": state["num1"] + state["num2"]}
 
-async def multiply_result(state: MathState) -> MathState:
-    state["final_result"] = state["sum_result"] * 2
-    return state
+def multiply_result(state: MathState) -> dict:
+    return {"final_result": state["sum_result"] * 2}
 
 # Build the StateGraph
-graph = StateGraph(MathState)
-graph.add_node("add", add_numbers)
-graph.add_node("multiply", multiply_result)
-graph.add_edge(START, "add")
-graph.add_edge("add", "multiply")
-graph.add_edge("multiply", END)
+builder = StateGraph(MathState)
+builder.add_node("add", add_numbers)
+builder.add_node("multiply", multiply_result)
+builder.add_edge(START, "add")
+builder.add_edge("add", "multiply")
+builder.add_edge("multiply", END)
 
 # Compile and run
-app = graph.compile()
-initial_state = {"num1": 5, "num2": 3, "sum_result": 0, "final_result": 0}
-final_state = await app.invoke(initial_state)
+app = builder.compile()
+final_state = app.invoke({"num1": 5, "num2": 3})
 print(final_state["final_result"])  # Output: 16
 ```
 
@@ -209,22 +208,25 @@ A StateGraph in LangGraph is a powerful abstraction for building stateful, modul
 ### Code Example: State in LangGraph
 
 ```python
-from langgraph.graph import StateGraph, END
+from typing import Annotated
+from typing_extensions import TypedDict
+from langchain_core.messages import AnyMessage
+from langgraph.graph import StateGraph, START, END, add_messages
 
 class MessagesState(TypedDict):
-    messages: list[AnyMessage]
+    messages: Annotated[list[AnyMessage], add_messages]  # reducer appends new messages
     llm_calls: int
 
-def llm_call(state: dict):
+def llm_call(state: MessagesState):
     # LLM decides next action based on current state
     return {
-        "messages": [...],  # updated message history
+        "messages": [...],  # new messages to append to the history
         "llm_calls": state.get('llm_calls', 0) + 1
     }
 
 workflow = StateGraph(MessagesState)
 workflow.add_node("llm_call", llm_call)
-workflow.set_entry_point("llm_call")
+workflow.add_edge(START, "llm_call")
 workflow.add_edge("llm_call", END)
 ```
 *Here, the state (including conversation history) is explicitly passed and updated at each step.*
@@ -544,34 +546,33 @@ LangGraph is a Python library designed for building complex, dynamic AI workflow
 
 #### **1. Define the State**
 
-Create a class or dictionary to hold the workflow’s state. This state will be updated and checked at each node.
+Define a schema (e.g., a `TypedDict`) to hold the workflow’s state. This state will be updated and checked at each node.
 
 ```python
-class MyState:
-    def __init__(self, user_input):
-        self.user_input = user_input
-        self.result = None
+from typing_extensions import TypedDict
+
+class MyState(TypedDict):
+    user_input: int
+    result: str
 ```
 
 #### **2. Define Nodes (Functions)**
 
-Each node is a function that takes the state as input and may update it.
+Each node is a function that takes the state as input and returns a partial state update.
 
 ```python
-def check_input(state):
-    if state.user_input > 5:
-        state.result = "win"
-    else:
-        state.result = "lose"
-    return state
+def check_input(state: MyState):
+    if state["user_input"] > 5:
+        return {"result": "win"}
+    return {"result": "lose"}
 
-def win_node(state):
+def win_node(state: MyState):
     print("You win!")
-    return state
+    return {}
 
-def lose_node(state):
+def lose_node(state: MyState):
     print("You lose!")
-    return state
+    return {}
 ```
 
 #### **3. Build the Graph and Add Nodes**
@@ -579,21 +580,26 @@ def lose_node(state):
 Use LangGraph’s `StateGraph` to add nodes and define the workflow.
 
 ```python
-from langgraph import StateGraph
+from langgraph.graph import StateGraph, START, END
 
-graph = StateGraph(MyState)
-graph.add_node("check_input", check_input)
-graph.add_node("win", win_node)
-graph.add_node("lose", lose_node)
+builder = StateGraph(MyState)
+builder.add_node("check_input", check_input)
+builder.add_node("win", win_node)
+builder.add_node("lose", lose_node)
+builder.add_edge(START, "check_input")
 ```
 
 #### **4. Add Conditional Edges for Branching**
 
-Define edges that branch based on the state.
+Define a routing function and attach it with `add_conditional_edges` so the path branches based on the state.
 
 ```python
-graph.add_edge("check_input", "win", condition=lambda s: s.result == "win")
-graph.add_edge("check_input", "lose", condition=lambda s: s.result == "lose")
+def route_result(state: MyState):
+    return "win" if state["result"] == "win" else "lose"
+
+builder.add_conditional_edges("check_input", route_result, {"win": "win", "lose": "lose"})
+builder.add_edge("win", END)
+builder.add_edge("lose", END)
 ```
 
 #### **5. Compile and Run**
@@ -601,9 +607,8 @@ graph.add_edge("check_input", "lose", condition=lambda s: s.result == "lose")
 Compile the graph and execute it with an initial state.
 
 ```python
-workflow = graph.compile()
-initial_state = MyState(user_input=7)
-workflow.run(initial_state)
+workflow = builder.compile()
+workflow.invoke({"user_input": 7})
 ```
 
 ---
@@ -668,20 +673,18 @@ Here's a clear explanation of how to create a simple conversation agent using La
 First, set up your language model (e.g., GPT-4o, ChatAnthropic) and any tools you want the agent to use (like a search tool).
 
 ```python
-from langchain.chat_models import ChatAnthropic
-model = ChatAnthropic()
+from langchain_anthropic import ChatAnthropic
+model = ChatAnthropic(model="claude-sonnet-4-5")
 # Optionally, define and bind tools
-search_tool = SearchTool()
-model.bind_tools([search_tool])
+model_with_tools = model.bind_tools([search_tool])
 ```
 
 ### 2. Define the Conversation State
 
-LangGraph uses a state object to track messages and context. The `MessagesState` schema is commonly used.
+LangGraph uses a state object to track messages and context. The prebuilt `MessagesState` schema is commonly used.
 
 ```python
-from langgraph import StateGraph
-from langgraph.states import MessagesState
+from langgraph.graph import StateGraph, MessagesState, START, END
 ```
 
 ### 3. Build the Conversation Graph
@@ -692,22 +695,22 @@ Create a graph where each node represents a step in the conversation. For a simp
 - (Optional) A "tools" node if you want the agent to use external tools.
 
 ```python
-graph = StateGraph(MessagesState)
-graph.add_node('agent', call_model)
-graph.add_edge('START', 'agent')
-graph.add_edge('agent', 'END')
+builder = StateGraph(MessagesState)
+builder.add_node('agent', call_model)
+builder.add_edge(START, 'agent')
+builder.add_edge('agent', END)
+graph = builder.compile()
 ```
 
 ### 4. Implement the Node Logic
 
-Define what happens at each node. For the agent node, call the LLM with the current state.
+Define what happens at each node. For the agent node, call the LLM with the current state and return the new message as a partial state update (the `add_messages` reducer appends it to the history).
 
 ```python
 def call_model(state: MessagesState):
     # Use the model to generate a response based on the conversation history
-    response = model(state.messages)
-    state.messages.append(response)
-    return state
+    response = model.invoke(state["messages"])
+    return {"messages": [response]}
 ```
 
 ### 5. Run the Agent
@@ -715,9 +718,8 @@ def call_model(state: MessagesState):
 Start the conversation by sending a user message and let the graph process it.
 
 ```python
-state = MessagesState(messages=[user_message])
-final_state = graph.run(state)
-print(final_state.messages[-1])  # The agent's reply
+final_state = graph.invoke({"messages": [user_message]})
+print(final_state["messages"][-1])  # The agent's reply
 ```
 
 ---
@@ -780,21 +782,29 @@ This process gives you a robust foundation for building simple (and extensible) 
 ### Code Example (Python, simplified)
 
 ```python
-from langgraph.graph import StateGraph
+from typing_extensions import TypedDict
+from langgraph.graph import StateGraph, START, END
 
-def search_step(state):
+class ResearchState(TypedDict):
+    query: str
+    results: list
+    summary: str
+
+def search_step(state: ResearchState):
     # Search for information
-    return updated_state
+    return {"results": [...]}
 
-def summarize_step(state):
+def summarize_step(state: ResearchState):
     # Summarize findings
-    return updated_state
+    return {"summary": "..."}
 
-graph = StateGraph()
-graph.add_node("search", search_step)
-graph.add_node("summarize", summarize_step)
-graph.add_edge("search", "summarize")
-graph.set_entry_point("search")
+builder = StateGraph(ResearchState)
+builder.add_node("search", search_step)
+builder.add_node("summarize", summarize_step)
+builder.add_edge(START, "search")
+builder.add_edge("search", "summarize")
+builder.add_edge("summarize", END)
+graph = builder.compile()
 ```
 
 This example shows a simple research agent that first searches, then summarizes, but real-world graphs can include loops, branches, and conditional logic.
@@ -863,10 +873,10 @@ LangGraph is designed to orchestrate complex, stateful AI workflows, and a key f
 
 2. **Bind the Tool to a Node**: Use LangGraph’s `ToolNode` or bind the tool to an LLM node.
    ```python
-   from langgraph.graph import ToolNode
+   from langgraph.prebuilt import ToolNode
 
    tools = [get_weather]
-   tool_node = ToolNode(tools=tools)
+   tool_node = ToolNode(tools)
    ```
 
 3. **Add the Tool Node to the Workflow**: Insert the tool node into your state graph, connecting it to other nodes (like your chatbot or reasoning node).
@@ -949,25 +959,26 @@ To integrate external tools in LangGraph, define your tool, bind it to a node (o
 
 #### **Code Example: Simple Comparison**
 
-**LangChain (Linear Chain Example):**
+**LangChain (Linear Runnable Pipeline):**
 ```python
-from langchain.chains import SimpleSequentialChain
-
-chain = SimpleSequentialChain(chains=[chain1, chain2, chain3])
-result = chain.run(input_data)
+# A linear pipeline composed with the Runnable interface
+chain = prompt | model | output_parser
+result = chain.invoke(input_data)
 ```
 
 **LangGraph (Graph-based Workflow):**
 ```python
-import langgraph
+from langgraph.graph import StateGraph, START, END
 
-graph = langgraph.Graph()
-graph.add_node("start", start_fn)
-graph.add_node("decision", decision_fn)
-graph.add_edge("start", "decision")
-graph.add_edge("decision", "branch1", condition=cond1)
-graph.add_edge("decision", "branch2", condition=cond2)
-result = graph.run(input_data)
+builder = StateGraph(State)
+builder.add_node("start_step", start_fn)
+builder.add_node("decision", decision_fn)
+builder.add_edge(START, "start_step")
+builder.add_edge("start_step", "decision")
+builder.add_conditional_edges("decision", route_fn, ["branch1", "branch2"])
+
+graph = builder.compile()
+result = graph.invoke(input_data)
 ```
 
 ---
@@ -1047,22 +1058,23 @@ LangChain is best for simple to moderately complex, linear workflows and rapid p
 **Code Example**
 
 ```python
-from langgraph.graph import StateGraph
+from typing_extensions import TypedDict
+from langgraph.graph import StateGraph, START, END
 
 class MemoryState(TypedDict):
     input: str
     history: str
 
-def process_input(state: MemoryState) -> MemoryState:
+def process_input(state: MemoryState) -> dict:
     user_input = state['input']
     prev_history = state.get('history', '')
     new_history = prev_history + "\n" + user_input
-    return {"input": user_input, "history": new_history}
+    return {"history": new_history}
 
 builder = StateGraph(MemoryState)
 builder.add_node("input_handler", process_input)
-builder.set_entry_point("input_handler")
-builder.add_edge("input_handler", "END")
+builder.add_edge(START, "input_handler")
+builder.add_edge("input_handler", END)
 graph = builder.compile()
 
 # Each invocation preserves and updates the context
@@ -1165,8 +1177,10 @@ def tool_node(state):
         # Update state with error info
         return {"error": {"type": "APIError", "message": str(e)}}
 
-# Adding retry logic (pseudo-code)
-builder.add_node("tool_node", tool_node, retry_policy={"max_retries": 3, "delay": 2})
+# Adding retry logic with LangGraph's built-in RetryPolicy
+from langgraph.types import RetryPolicy
+
+builder.add_node("tool_node", tool_node, retry_policy=RetryPolicy(max_attempts=3))
 ```
 
 ---
@@ -1347,14 +1361,14 @@ Evaluating a LangGraph-based agentic RAG system requires a holistic approach: me
 
 #### **Code Example: Control in LangGraph**
 ```python
-from langgraph import StateGraph
+from langgraph.graph import StateGraph, START, END
 
-graph = StateGraph()
-graph.add_node("start", start_fn)
-graph.add_node("process", process_fn)
-graph.add_node("end", end_fn)
-graph.add_edge("start", "process")
-graph.add_edge("process", "end")
+builder = StateGraph(State)
+builder.add_node("start_step", start_fn)
+builder.add_node("process", process_fn)
+builder.add_edge(START, "start_step")
+builder.add_edge("start_step", "process")
+builder.add_edge("process", END)
 # All paths are explicitly defined
 ```
 *Here, the agent can only follow the paths you define—no dynamic deviation.*
@@ -1473,8 +1487,9 @@ For Redis:
 ```python
 from langgraph.checkpoint.redis import RedisSaver
 
-checkpointer = RedisSaver(redis_url="redis://localhost:6379/0")
-graph = workflow.compile(checkpointer=checkpointer)
+with RedisSaver.from_conn_string("redis://localhost:6379/0") as checkpointer:
+    checkpointer.setup()
+    graph = workflow.compile(checkpointer=checkpointer)
 ```
 
 #### **3. Run and Persist State by Thread**
@@ -1737,10 +1752,10 @@ Here’s a comprehensive explanation of how to build a multi-agent system using 
      from langgraph.graph import StateGraph
 
      def create_agent(agent_name, tools, prompt_template):
-         graph = StateGraph()
+         builder = StateGraph(AgentState)
          # Add nodes and edges for the agent's workflow
          # e.g., tool calls, LLM calls, decision points
-         return graph
+         return builder.compile()
      ```
 
 #### 3. **Orchestrate Agents with a Supervisor or Swarm Pattern**
@@ -1768,26 +1783,32 @@ Here’s a comprehensive explanation of how to build a multi-agent system using 
 ### **Code Example: Multi-Agent Orchestration**
 
 ```python
-from langgraph.graph import StateGraph
+from langgraph.graph import StateGraph, START, END
 
-# Define agents
+# Define agents (each is a compiled subgraph)
 research_agent = create_agent("Research", [search_tool], research_prompt)
 critique_agent = create_agent("Critique", [llm_tool], critique_prompt)
 synthesis_agent = create_agent("Synthesis", [llm_tool], synthesis_prompt)
 
-# Supervisor graph
-supervisor = StateGraph()
-supervisor.add_node("Research", research_agent)
-supervisor.add_node("Critique", critique_agent)
-supervisor.add_node("Synthesis", synthesis_agent)
+# Supervisor graph: add subgraphs as nodes
+builder = StateGraph(TeamState)
+builder.add_node("Research", research_agent)
+builder.add_node("Critique", critique_agent)
+builder.add_node("Synthesis", synthesis_agent)
 
 # Define edges and cycles
-supervisor.add_edge("Research", "Critique")
-supervisor.add_edge("Critique", "Synthesis")
-supervisor.add_edge("Synthesis", "Research", condition=needs_more_research)
+builder.add_edge(START, "Research")
+builder.add_edge("Research", "Critique")
+builder.add_edge("Critique", "Synthesis")
+builder.add_conditional_edges(
+    "Synthesis",
+    needs_more_research,  # routing function returning "Research" or END
+    {"Research": "Research", END: END},
+)
 
 # Run the system
-result = supervisor.run(initial_state)
+supervisor = builder.compile()
+result = supervisor.invoke(initial_state)
 ```
 
 ---
@@ -1850,15 +1871,18 @@ LangGraph enables robust, flexible multi-agent systems by allowing you to define
 A simple conditional node in LangGraph might look like:
 
 ```python
-def check_query(state):
+def route_query(state):
     if "refund" in state["user_query"]:
         return "handle_refund"
     else:
         return "handle_general"
 
-graph.add_node("check_query", check_query)
-graph.add_edge("check_query", "handle_refund", condition=lambda state: "refund" in state["user_query"])
-graph.add_edge("check_query", "handle_general", condition=lambda state: "refund" not in state["user_query"])
+builder.add_node("check_query", check_query)
+builder.add_conditional_edges(
+    "check_query",
+    route_query,
+    {"handle_refund": "handle_refund", "handle_general": "handle_general"},
+)
 ```
 
 **Best Practices**
@@ -1896,10 +1920,9 @@ Here are best practices for maintaining and updating LangGraph workflows in prod
 ### 1. **Modular and Maintainable Workflow Design**
 - **Modular Node Development:** Design each node (step) as an independent, reusable unit with clear inputs and outputs. This makes updates and debugging easier.
     ```python
-    class CustomNode(Node):
-        def process(self, data):
-            # Custom processing logic
-            return modified_data
+    def custom_node(state: State) -> dict:
+        # Custom processing logic; return a partial state update
+        return {"result": modified_data}
     ```
 - **State Management:** Use LangGraph’s stateful execution features (e.g., `AgentState` or custom state objects) to maintain context across workflow steps. Store only necessary information to avoid state bloat.
 
@@ -2122,8 +2145,9 @@ A team building a customer support agent with LangGraph uses LangSmith to monito
 - Example:
   ```python
   def greet_node(state: Dict[str, Any]) -> Dict[str, Any]:
-      state["messages"].append("How can I help you?")
-      return state
+      # Return a partial update; with an add_messages/operator.add reducer,
+      # the new message is appended to the existing list
+      return {"messages": ["How can I help you?"]}
   ```
 
 #### 3. **Edges (Mappings/Transitions)**
@@ -2191,9 +2215,10 @@ LangGraph leverages vector embeddings to enable long-term and context-aware memo
    - This embedding, along with metadata (like user ID or context), is stored in the vector store.
    - Example (Python pseudo-code):
      ```python
-     from langgraph.store import BaseStore
-     # Assume `embedding` is generated from content
-     store.put(("memories", user_id), key=mem_id, value={"content": content, "embedding": embedding, "context": context})
+     from langgraph.store.base import BaseStore
+     # The store embeds `content` automatically when configured with an
+     # embedding index, e.g. InMemoryStore(index={"embed": embeddings, "dims": 1536})
+     store.put(("memories", user_id), mem_id, {"content": content, "context": context})
      ```
 
 2. **Retrieving Context**:
@@ -2201,8 +2226,7 @@ LangGraph leverages vector embeddings to enable long-term and context-aware memo
    - It then performs a similarity search in the vector store to find the most relevant past memories.
    - Example:
      ```python
-     query_embedding = embed(current_query)
-     memories = store.search(("memories", user_id), query=query_embedding)
+     memories = store.search(("memories", user_id), query=current_query)
      # Use retrieved memories to augment the agent's context
      ```
 
@@ -2373,7 +2397,7 @@ Scaling LangGraph for high-concurrency scenarios involves a combination of archi
   - For scalable deployments, maintain global state, pending messages, and user responses outside the LangGraph workflow (e.g., in a distributed cache or database) using a unique `session_id`. This allows horizontal scaling and stateless service instances.
 
 - **Managed vs. Self-Hosted Scaling:**
-  - The LangGraph Platform offers managed, scalable infrastructure with built-in deployment, monitoring, and scaling. For open-source/self-hosted deployments, you must implement your own scaling, API layer, and monitoring.
+  - LangSmith Deployment (formerly LangGraph Platform) offers managed, scalable infrastructure with built-in deployment, monitoring, and scaling. For open-source/self-hosted deployments, you must implement your own scaling, API layer, and monitoring.
 
 ---
 
@@ -2382,9 +2406,12 @@ Scaling LangGraph for high-concurrency scenarios involves a combination of archi
 ```python
 from langgraph.graph import StateGraph
 
-graph = StateGraph()
+builder = StateGraph(State)
 # ... define nodes and edges ...
-graph.set_max_concurrency(10)  # Limit to 10 concurrent nodes
+graph = builder.compile()
+
+# Limit to 10 concurrent tasks via the run config
+result = graph.invoke(inputs, config={"max_concurrency": 10})
 ```
 
 ---
@@ -2395,7 +2422,7 @@ graph.set_max_concurrency(10)  # Limit to 10 concurrent nodes
 - **Use Asynchronous Nodes:** Implement async functions for nodes to maximize throughput and minimize blocking.
 - **Externalize State:** Store workflow state, message queues, and session data in scalable external systems (e.g., Redis, DynamoDB) to enable stateless scaling.
 - **Leverage Parallelization Patterns:** Use map-reduce or dynamic task creation (via the Send API) for workloads where the number of parallel tasks is determined at runtime.
-- **Deploy on Scalable Infrastructure:** Use container orchestration (Kubernetes, ECS) or the LangGraph Platform for auto-scaling and high availability.
+- **Deploy on Scalable Infrastructure:** Use container orchestration (Kubernetes, ECS) or LangSmith Deployment for auto-scaling and high availability.
 
 ---
 
@@ -2463,41 +2490,49 @@ A retail company wants to automate customer support for product recommendations 
 #### **Code Example (Python, Pseudocode)**
 
 ```python
-import langgraph
+from langgraph.graph import StateGraph, START, END
 
-# Define nodes
-def detect_intent(input, memory):
+# Define nodes (each returns a partial state update)
+def detect_intent(state):
     # Use LLM to classify intent
     ...
 
-def recommend_product(input, memory):
+def recommend_product(state):
     # Query product DB, ask clarifying questions
     ...
 
-def track_order(input, memory):
+def track_order(state):
     # Query order system
     ...
 
-def escalate(input, memory):
+def escalate(state):
     # Route to human or create ticket
     ...
 
+# Routing functions
+def route_intent(state):
+    return "recommend" if state["intent"] == "product_search" else "track"
+
+def route_outcome(state):
+    return "escalate" if state.get("needs_escalation") else END
+
 # Build the graph
-graph = langgraph.Graph()
-graph.add_node("intent", detect_intent)
-graph.add_node("recommend", recommend_product)
-graph.add_node("track", track_order)
-graph.add_node("escalate", escalate)
+builder = StateGraph(SupportState)
+builder.add_node("intent", detect_intent)
+builder.add_node("recommend", recommend_product)
+builder.add_node("track", track_order)
+builder.add_node("escalate", escalate)
 
 # Define transitions
-graph.add_edge("intent", "recommend", condition="intent:product_search")
-graph.add_edge("intent", "track", condition="intent:order_status")
-graph.add_edge("recommend", "escalate", condition="frustration_detected")
-graph.add_edge("track", "escalate", condition="unresolved")
-# ... more edges as needed
+builder.add_edge(START, "intent")
+builder.add_conditional_edges("intent", route_intent, ["recommend", "track"])
+builder.add_conditional_edges("recommend", route_outcome, ["escalate", END])
+builder.add_conditional_edges("track", route_outcome, ["escalate", END])
+builder.add_edge("escalate", END)
 
 # Run the workflow
-result = graph.run(user_input)
+graph = builder.compile()
+result = graph.invoke({"user_input": user_input})
 ```
 
 #### **Best Practices**
@@ -2521,7 +2556,7 @@ result = graph.run(user_input)
 
 **References:**  
 - [LangGraph Retail Example (LangChain Blog)](https://blog.langchain.dev/introducing-langgraph/)
-- [LangGraph Documentation: Use Cases](https://langchain-ai.github.io/langgraph/use_cases/)
+- [LangGraph Documentation: Workflows and Agents](https://docs.langchain.com/oss/python/langgraph/workflows-agents)
 - [LangGraph GitHub: Customer Service Example](https://github.com/langchain-ai/langgraph/tree/main/examples/customer_service)
 
 LangGraph’s graph-based approach makes it ideal for orchestrating complex, stateful workflows in retail and customer service scenarios.
@@ -2568,7 +2603,7 @@ Example node for retrieval:
 ```python
 def retrieve(state):
     question = state["question"]
-    documents = retriever.get_relevant_documents(question)
+    documents = retriever.invoke(question)
     return {"documents": documents, "question": question}
 ```
 
@@ -2576,14 +2611,16 @@ def retrieve(state):
 Use LangGraph’s `StateGraph` to define nodes and transitions.
 
 ```python
-from langgraph.graph import StateGraph
+from langgraph.graph import StateGraph, START, END
 
 rag_graph = StateGraph(GraphState)
 rag_graph.add_node("retrieve", retrieve)
 rag_graph.add_node("generate_answer", generate_answer)
 # Add more nodes as needed (e.g., grade_documents, rewrite_query)
+rag_graph.add_edge(START, "retrieve")
 rag_graph.add_edge("retrieve", "generate_answer")
 rag_graph.add_edge("generate_answer", END)
+graph = rag_graph.compile()
 ```
 
 #### 4. **Integrate External Tools**
@@ -2753,18 +2790,22 @@ tool_node = ToolNode(...)
 ```
 
 **2. Multi-level Error Handling and State Management**  
-Implement multi-level error handling using error-handling nodes and rigorous state management. For example, use a `NodeErrorHandler` with retry and fallback strategies:
+Implement multi-level error handling: catch exceptions inside nodes, record structured error info in the state, and use LangGraph's built-in `RetryPolicy` with fallback routing:
 
 ```python
-from langchain.error_handling import NodeErrorHandler
-from langgraph.state_management import GraphState
+from langgraph.types import RetryPolicy
 
-graph_state = GraphState(include_error_metadata=True)
-node_error_handler = NodeErrorHandler(
-    state=graph_state,
-    max_retries=3,
-    fallback_strategy='graceful_degradation'
-)
+# Automatic retries for transient failures
+builder.add_node("call_tool", call_tool, retry_policy=RetryPolicy(max_attempts=3))
+
+# Node-level capture: store the error in state and let a
+# conditional edge route to a fallback/error-handler node
+def call_tool(state):
+    try:
+        result = run_tool(state["tool_args"])
+        return {"result": result}
+    except Exception as e:
+        return {"error": {"type": type(e).__name__, "message": str(e)}}
 ```
 
 **3. Improve Tool Schemas and Descriptions**  
@@ -2875,10 +2916,10 @@ class PlannerState(TypedDict):
     question: str
     sub_questions: list[str]
 
-def planner_node(state: PlannerState) -> PlannerState:
+def planner_node(state: PlannerState) -> dict:
     # Logic to break down the question into sub-questions
     ...
-    return updated_state
+    return {"sub_questions": sub_questions}
 ```
 
 ```python
@@ -2937,40 +2978,44 @@ These strategies will help keep large LangGraph projects maintainable, scalable,
     - Edges: Define the transitions or flow between tasks, allowing for dynamic and stateful execution.
 
 - **Visualization**: LangGraph provides built-in visualization tools to help users understand and debug their workflows. These tools can generate graphical representations (such as PNG images) of the workflow graph, making it easier to see the structure and flow at a glance.
-    - LangGraph Studio: A visual interface (IDE) that allows users to design, build, and share workflows using a drag-and-drop graphical editor, without writing code.
-    - Programmatic Visualization: The Python library includes methods (e.g., `get_graph`) to export and visualize the workflow graph directly from code.
+    - LangGraph Studio: a visual IDE for visualizing, debugging, and interacting with graphs that you define in code (it is not a drag-and-drop or no-code authoring tool).
+    - Programmatic Visualization: The Python library includes methods (e.g., `get_graph().draw_mermaid_png()`) to export and visualize the workflow graph directly from code.
 
 **Code Example**
 
 Here’s a simplified example of defining and visualizing a workflow in LangGraph (Python):
 
 ```python
-from langgraph import StateGraph
+from langgraph.graph import StateGraph, START, END
 
 # Define node functions
 def greet(state):
     print("Hello!")
-    return state
+    return {}
 
 def ask_question(state):
     print("How can I help you?")
-    return state
+    return {}
 
 # Create the graph
-graph = StateGraph()
-graph.add_node("greet", greet)
-graph.add_node("ask", ask_question)
-graph.add_edge("greet", "ask")
+builder = StateGraph(State)
+builder.add_node("greet", greet)
+builder.add_node("ask", ask_question)
+builder.add_edge(START, "greet")
+builder.add_edge("greet", "ask")
+builder.add_edge("ask", END)
+graph = builder.compile()
 
 # Visualize the workflow
-graph.visualize("workflow.png")  # Exports a PNG image of the workflow
+png_bytes = graph.get_graph().draw_mermaid_png()  # PNG image of the workflow
+print(graph.get_graph().draw_mermaid())           # Mermaid diagram source
 ```
 
 **Best Practices**
 
 - Use clear, descriptive names for nodes to make the workflow graph easy to understand.
 - Leverage visualization early in development to catch logical errors and optimize workflow structure.
-- For complex workflows, consider using LangGraph Studio for a no-code, collaborative design experience.
+- For complex workflows, use LangGraph Studio to visualize, debug, and step through graph runs interactively.
 
 **Common Pitfalls**
 
@@ -3143,7 +3188,7 @@ def route_decision(state):
     else:
         return 'fallback'
 
-builder = StateGraph(dict)
+builder = StateGraph(SupportState)  # SupportState is a TypedDict schema
 builder.add_node('billing_agent', billing_agent)
 builder.add_node('tech_agent', tech_agent)
 builder.add_conditional_edges(START, route_decision)
@@ -3236,7 +3281,7 @@ def authorize(user, resource, action):
 **Example (Python):**
 ```python
 workflow.add_node("authorization", authorize)
-workflow.add_conditional_edges("agent", should_continue, ["authorization", "tools", "END"])
+workflow.add_conditional_edges("agent", should_continue, ["authorization", "tools", END])
 ```
 - This pattern allows you to pause, check permissions, and branch the workflow accordingly.
 
@@ -3325,7 +3370,7 @@ Implementing access controls in LangGraph involves integrating authentication, d
    - Example (Python):
      ```python
      # Old
-     from langchain.agents import create_react_agent
+     from langgraph.prebuilt import create_react_agent
      agent = create_react_agent(...)
      
      # New
@@ -3405,8 +3450,8 @@ By following these steps and best practices, you can smoothly upgrade your LangC
    - *Approach*: Seek out community forums, GitHub issues, and blog posts for real-world examples. When stuck, try to reproduce minimal working examples and incrementally add features. Contribute back by sharing your own findings to help grow the ecosystem.
 
 3. **Async Programming Requirements**
-   - LangGraph expects all node functions to be asynchronous. Mixing synchronous and asynchronous code can lead to crashes or unpredictable behavior.
-   - *Approach*: Always define node functions as async and use `await` for any asynchronous operations. If you’re new to async programming in Python, review basic async/await patterns before diving into LangGraph.
+   - LangGraph supports both synchronous and asynchronous node functions, but mixing them incorrectly (e.g., calling async APIs from sync nodes, forgetting `await`, or running blocking code inside async nodes) can lead to crashes or unpredictable behavior.
+   - *Approach*: Pick one style per graph where possible — sync nodes with `graph.invoke`, or `async def` nodes with `await graph.ainvoke`. If you’re new to async programming in Python, review basic async/await patterns before diving into LangGraph’s async APIs.
 
 4. **Versioning and API Changes**
    - Rapid development means that code examples online may not match the current version, leading to confusion and errors.
@@ -3423,7 +3468,7 @@ By following these steps and best practices, you can smoothly upgrade your LangC
 - Join the LangGraph or LangChain community for support and updates.
 
 **Common Pitfalls:**
-- Forgetting to make node functions async.
+- Mixing sync and async node code incorrectly (e.g., forgetting `await` inside `async def` nodes).
 - Overcomplicating the initial graph design.
 - Copy-pasting code from outdated examples without checking compatibility.
 
@@ -3744,14 +3789,15 @@ Reproducibility is a key concern when building agent-based applications with Lan
 - Use LangGraph’s built-in checkpointing mechanisms (e.g., `InMemorySaver`, or persistent savers for production) to save the state at each step. This allows you to replay or resume workflows from any point, ensuring that outputs can be traced and reproduced.
 - Example:
   ```python
-  from langgraph_supervisor import create_supervisor, InMemorySaver
+  from langchain.chat_models import init_chat_model
+  from langgraph_supervisor import create_supervisor
+  from langgraph.checkpoint.memory import InMemorySaver
 
   supervisor = create_supervisor(
-      model="openai:o3-pro",
       agents=[agent1, agent2],
+      model=init_chat_model("openai:gpt-4o"),
       prompt="System prompt...",
-      checkpoint_saver=InMemorySaver(),  # For reproducibility, use a persistent saver in production
-  )
+  ).compile(checkpointer=InMemorySaver())  # For reproducibility, use a persistent saver in production
   ```
 
 **4. Input and Output Logging**
@@ -3836,19 +3882,25 @@ By following these practices, you can ensure that your LangGraph applications pr
 
 **Code Example: Parallel Execution in LangGraph**
 ```python
-from langgraph.graph import StateGraph
+from langgraph.graph import StateGraph, START, END
 
 def fetch_data_a(state): ...
 def fetch_data_b(state): ...
 def aggregate_results(state): ...
 
-graph = StateGraph()
-graph.add_node("fetch_a", fetch_data_a)
-graph.add_node("fetch_b", fetch_data_b)
-graph.add_node("aggregate", aggregate_results)
+builder = StateGraph(State)
+builder.add_node("fetch_a", fetch_data_a)
+builder.add_node("fetch_b", fetch_data_b)
+builder.add_node("aggregate", aggregate_results)
 
-# Run fetch_a and fetch_b in parallel, then aggregate
-graph.add_parallel(["fetch_a", "fetch_b"], next_node="aggregate")
+# Fan-out: fetch_a and fetch_b run in parallel in the same superstep,
+# then both fan back in to aggregate
+builder.add_edge(START, "fetch_a")
+builder.add_edge(START, "fetch_b")
+builder.add_edge("fetch_a", "aggregate")
+builder.add_edge("fetch_b", "aggregate")
+builder.add_edge("aggregate", END)
+graph = builder.compile()
 ```
 
 **Best Practices**
@@ -3897,39 +3949,43 @@ A **hybrid workflow** that mixes LangGraph and LangChain nodes leverages the str
 ### **2. Example Structure**
 
 ```python
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import StateGraph, MessagesState, START, END
 from langchain.agents import create_agent
-from langchain.tools import Tool
+from langchain_core.tools import tool
 
 # Define a LangChain tool
-search_tool = Tool(name="search", func=search_func, description="Web search tool")
+@tool
+def search(query: str) -> str:
+    """Web search tool."""
+    return search_func(query)
 
-# Create a LangChain agent
-agent = create_agent(tools=[search_tool], llm=llm)
+# Create a LangChain agent (a compiled LangGraph graph itself)
+agent = create_agent(model, tools=[search])
 
-# Define LangGraph nodes
+# Define LangGraph nodes (each returns a partial state update)
 def preprocess_node(state):
     # Custom preprocessing logic
-    return state
+    return {}
 
 def agent_node(state):
     # Use the LangChain agent as a node
-    return agent.invoke(state)
+    result = agent.invoke({"messages": state["messages"]})
+    return {"messages": result["messages"]}
 
 def postprocess_node(state):
     # Custom postprocessing logic
-    return state
+    return {}
 
 # Build the LangGraph workflow
-graph = StateGraph()
-graph.add_node("preprocess", preprocess_node)
-graph.add_node("agent", agent_node)
-graph.add_node("postprocess", postprocess_node)
-graph.add_edge(START, "preprocess")
-graph.add_edge("preprocess", "agent")
-graph.add_edge("agent", "postprocess")
-graph.add_edge("postprocess", END)
-workflow = graph.compile()
+builder = StateGraph(MessagesState)
+builder.add_node("preprocess", preprocess_node)
+builder.add_node("agent", agent_node)
+builder.add_node("postprocess", postprocess_node)
+builder.add_edge(START, "preprocess")
+builder.add_edge("preprocess", "agent")
+builder.add_edge("agent", "postprocess")
+builder.add_edge("postprocess", END)
+workflow = builder.compile()
 ```
 
 - Here, `agent_node` is a LangGraph node that wraps a LangChain agent, while other nodes can be custom logic or other LangChain components.
@@ -3993,18 +4049,20 @@ A hybrid workflow uses LangGraph for orchestration and state management, while e
 
 **Code Example:**
 ```python
-from langgraph.graph import StateGraph, State
+from typing_extensions import TypedDict
+from langgraph.graph import StateGraph, START, END
 
-class MyState(State):
+class MyState(TypedDict):
     # Define state variables here
-    pass
+    status: str
 
-graph = StateGraph(MyState)
-graph.add_node("start", start_function)
-graph.add_node("process", process_function)
-graph.add_edge("start", "process", condition=some_condition)
+builder = StateGraph(MyState)
+builder.add_node("start_step", start_function)
+builder.add_node("process", process_function)
+builder.add_edge(START, "start_step")
+builder.add_conditional_edges("start_step", some_condition, ["process", END])
 ```
-In this example, each node is a state, and `add_edge` defines possible transitions, just like in an FSM.
+In this example, each node is a state, and the edges (including conditional edges) define possible transitions, just like in an FSM.
 
 **Best Practices:**
 - **Explicit State Management:** Clearly define all possible states and transitions to avoid unexpected behavior.
@@ -4054,6 +4112,7 @@ LangGraph leverages the theory and structure of finite state machines to model a
 A simplified example of defining a state graph in LangGraph (Python):
 
 ```python
+from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, START, END
 from langgraph.managed import RemainingSteps
 
@@ -4204,17 +4263,21 @@ LangGraph provides robust mechanisms for session persistence and recovery, ensur
 ### **Code Example**
 
 ```python
+import sqlite3
 from langgraph.checkpoint.sqlite import SqliteSaver
-from langgraph.graph import Graph
+from langgraph.graph import StateGraph
 
 # Set up a checkpointer
-checkpointer = SqliteSaver("my_sessions.db")
+checkpointer = SqliteSaver(sqlite3.connect("my_sessions.db", check_same_thread=False))
 
 # Compile your graph with the checkpointer
-graph = Graph(...).compile(checkpointer=checkpointer)
+builder = StateGraph(State)
+# ... add nodes and edges ...
+graph = builder.compile(checkpointer=checkpointer)
 
-# To resume a session
-resumed_state = graph.invoke(None, config={"thread_id": "user-session-123"})
+# To resume a session, invoke again with the same thread_id
+config = {"configurable": {"thread_id": "user-session-123"}}
+resumed_state = graph.invoke(None, config=config)
 ```
 
 ---
@@ -4368,36 +4431,37 @@ LangGraph is highly effective for building interview agent systems, such as mock
 A typical setup might look like this (based on the [Twilio WhatsApp + LangGraph example](https://www.twilio.com/en-us/blog/developers/community/build-a-mock-interview-agent-using-twilio-whatsapp-api--langgrap) and [Medium tutorial](https://medium.com/@maxforsamp98/building-an-ai-interviewer-agent-with-google-gemini-and-langgraph-c752e0ae65f3)):
 
 ```python
-from langgraph.prebuilt import create_react_agent
-from langchain_openai import ChatOpenAI
+from langchain.agents import create_agent
 from langchain_core.tools import tool
-from langchain.prompts import PromptTemplate
+from langgraph.checkpoint.memory import InMemorySaver
 
 # Define your interview questions and evaluation tools
 @tool
-def select_question(state):
-    # Logic to select the next question based on state
+def select_question(stage: str) -> str:
+    """Select the next interview question for the given interview stage."""
     ...
 
 @tool
-def evaluate_answer(state):
-    # Logic to score or give feedback on the answer
+def evaluate_answer(question: str, answer: str) -> str:
+    """Score or give feedback on the candidate's answer."""
     ...
 
-# Create the agent with tools and prompt
-graph = create_react_agent(
-    model=ChatOpenAI(),
+# Create the agent (a compiled LangGraph graph) with tools and a system prompt
+graph = create_agent(
+    model="openai:gpt-4o",
     tools=[select_question, evaluate_answer],
-    prompt=PromptTemplate("You are a mock interviewer...")
+    system_prompt="You are a mock interviewer...",
+    checkpointer=InMemorySaver(),
 )
 
-# Manage user sessions and run the interview
-def run_interview(user_id, user_message, session_store):
-    session = session_store.get(user_id, [])
-    session.append(user_message)
-    response = graph.stream(session)
-    session_store[user_id] = session
-    return response
+# Manage user sessions via thread IDs and run the interview
+def run_interview(user_id, user_message):
+    config = {"configurable": {"thread_id": user_id}}
+    result = graph.invoke(
+        {"messages": [{"role": "user", "content": user_message}]},
+        config,
+    )
+    return result["messages"][-1].content
 ```
 
 ---
@@ -4548,17 +4612,20 @@ LangGraph provides several options for visualizing graph structures, making it e
 
 **Example:**
 ```python
-from langgraph.graph import StateGraph
+from langgraph.graph import StateGraph, START
 
 # Build your graph
 builder = StateGraph(State)
-builder.add_node(node)
-builder.set_entry_point("node")
+builder.add_node("node", node)
+builder.add_edge(START, "node")
 graph = builder.compile()
 
 # Visualize as Mermaid code
-mermaid_code = graph.get_mermaid()
+mermaid_code = graph.get_graph().draw_mermaid()
 print(mermaid_code)
+
+# Or render directly to a PNG image
+png_bytes = graph.get_graph().draw_mermaid_png()
 ```
 You can then paste the Mermaid code into an online Mermaid live editor to view the diagram.
 
@@ -4635,19 +4702,21 @@ LangGraph’s visualization options make it straightforward to inspect, debug, a
   - If a node fails, LangGraph will retry it according to the policy. If it succeeds on a later attempt, the workflow continues as normal.
   - If all retries are exhausted, the failure is treated as final, and the workflow can either halt or trigger fallback/error handling logic.
 
-**Example (Pseudocode):**
+**Example:**
 ```python
-from langgraph.policies import RetryPolicy
+from langgraph.types import RetryPolicy
 
 retry_policy = RetryPolicy(
     max_attempts=3,
-    delay=2,  # seconds between retries
-    retry_on=[TimeoutError, ConnectionError, RateLimitError]
+    initial_interval=2.0,  # seconds before the first retry (grows with backoff)
+    retry_on=(TimeoutError, ConnectionError),
 )
 
-@langgraph.node(retry_policy=retry_policy)
-def call_api_node(...):
+def call_api_node(state):
     # API call logic here
+    ...
+
+builder.add_node("call_api", call_api_node, retry_policy=retry_policy)
 ```
 - **Best Practices:**
   - Use retries for transient errors, not for critical or persistent failures.
@@ -4828,7 +4897,7 @@ This approach ensures robust, flexible, and traceable context sharing between no
 ## Code Example (Simplified)
 
 ```python
-from langgraph.graph import StateGraph, END
+from langgraph.graph import StateGraph, START, END
 from langchain_community.vectorstores import Chroma
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
@@ -4842,11 +4911,13 @@ def generate_node(state):
     ...
 
 # Build the workflow graph
-graph = StateGraph()
-graph.add_node("retrieve", retrieve_node)
-graph.add_node("generate", generate_node)
-graph.add_edge("retrieve", "generate")
-graph.add_edge("generate", END)
+builder = StateGraph(RAGState)  # RAGState is a TypedDict schema
+builder.add_node("retrieve", retrieve_node)
+builder.add_node("generate", generate_node)
+builder.add_edge(START, "retrieve")
+builder.add_edge("retrieve", "generate")
+builder.add_edge("generate", END)
+graph = builder.compile()
 ```
 
 ---
@@ -4906,7 +4977,7 @@ graph.add_edge("generate", END)
   LangGraph (via LangChain) can invoke AWS Lambda functions as part of an agent's toolset. This is typically done by configuring a Lambda tool with the function name, region, and AWS credentials.
 - **Example (JavaScript, LangChain):**
   ```js
-  import { AWSLambda } from "langchain/tools/aws_lambda";
+  import { AWSLambda } from "@langchain/community/tools/aws_lambda";
   const lambdaTool = new AWSLambda({
     functionName: "SendEmailViaSES",
     region: "us-east-1",
@@ -5085,9 +5156,9 @@ LangGraph is a powerful framework for constructing agentic workflows, making it 
 ### **Code Example (Simplified)**
 
 ```python
-import langgraph
+from langgraph.graph import StateGraph, START, END
 
-# Define agents
+# Define agents (nodes returning partial state updates)
 def analyze_query(state):
     # Extract user intent and preferences
     return {"category": extract_category(state["query"])}
@@ -5101,16 +5172,19 @@ def recommend(state):
     return {"recommendations": rank_items(state["items"], state["user_profile"])}
 
 # Build the graph
-graph = langgraph.Graph()
-graph.add_node("analyze_query", analyze_query)
-graph.add_node("retrieve_items", retrieve_items)
-graph.add_node("recommend", recommend)
-graph.add_edge("analyze_query", "retrieve_items")
-graph.add_edge("retrieve_items", "recommend")
+builder = StateGraph(RecommendationState)  # a TypedDict schema
+builder.add_node("analyze_query", analyze_query)
+builder.add_node("retrieve_items", retrieve_items)
+builder.add_node("recommend", recommend)
+builder.add_edge(START, "analyze_query")
+builder.add_edge("analyze_query", "retrieve_items")
+builder.add_edge("retrieve_items", "recommend")
+builder.add_edge("recommend", END)
 
 # Run the workflow
+graph = builder.compile()
 initial_state = {"query": "Find me a sci-fi book", "preferences": {...}, "user_profile": {...}}
-result = graph.run(initial_state)
+result = graph.invoke(initial_state)
 print(result["recommendations"])
 ```
 
@@ -5185,9 +5259,11 @@ LangGraph enables you to build flexible, modular recommendation engines by orche
 Suppose you want to test two prompt templates for a summarization agent:
 
 ```python
-from langgraph.graph import State, Graph
+import random
+from typing_extensions import TypedDict
+from langgraph.graph import StateGraph, START, END
 
-class SummarizationState(State):
+class SummarizationState(TypedDict):
     input_text: str
     output: str
     variant: str
@@ -5201,17 +5277,21 @@ def prompt_b(state):
     ...
 
 def random_assign(state):
-    import random
-    state.variant = random.choice(['A', 'B'])
-    return state
+    return {"variant": random.choice(['A', 'B'])}
 
-graph = Graph()
-graph.add_node('assign', random_assign)
-graph.add_node('A', prompt_a)
-graph.add_node('B', prompt_b)
+def route_variant(state):
+    return state["variant"]
 
-graph.add_edge('assign', 'A', condition=lambda s: s.variant == 'A')
-graph.add_edge('assign', 'B', condition=lambda s: s.variant == 'B')
+builder = StateGraph(SummarizationState)
+builder.add_node('assign', random_assign)
+builder.add_node('A', prompt_a)
+builder.add_node('B', prompt_b)
+
+builder.add_edge(START, 'assign')
+builder.add_conditional_edges('assign', route_variant, {'A': 'A', 'B': 'B'})
+builder.add_edge('A', END)
+builder.add_edge('B', END)
+graph = builder.compile()
 ```
 
 - Each run is randomly assigned to either prompt A or B.
@@ -5287,18 +5367,23 @@ LangGraph is designed to orchestrate complex, stateful, and potentially long-run
 
 ```python
 from langgraph.graph import StateGraph
+from langgraph.checkpoint.redis import RedisSaver
 
 # Define your state schema and graph as usual
-graph = StateGraph(...)
+builder = StateGraph(State)
+# ... add nodes and edges ...
 
-# Enable durable execution with a persistent store (e.g., Redis)
-graph.enable_durable_execution(store="redis://localhost:6379")
+# Enable durable execution by compiling with a persistent checkpointer (e.g., Redis)
+with RedisSaver.from_conn_string("redis://localhost:6379") as checkpointer:
+    checkpointer.setup()
+    graph = builder.compile(checkpointer=checkpointer)
 
-# Run the graph; it will checkpoint state at each step
-graph.run(input_data)
+    # Run the graph; it will checkpoint state as it executes
+    config = {"configurable": {"thread_id": "job-42"}}
+    graph.invoke(input_data, config, durability="sync")
 ```
 
-- You can configure when state is persisted (e.g., after every step, only on exit, etc.) for performance vs. safety trade-offs.
+- The `durability` mode (`"exit"`, `"async"`, or `"sync"`) controls when state is persisted, trading off performance vs. safety.
 
 ---
 
@@ -5381,24 +5466,25 @@ Minimizing latency in LangGraph workflows is crucial for delivering responsive A
 
 ### **Code Example: Parallel Node Execution in LangGraph**
 ```python
-from langgraph.graph import StateGraph, END
-from langgraph.graph.message import add_messages
-from langgraph.prebuilt import ToolNode
+from langgraph.graph import StateGraph, START, END
 
-# Define two independent tool nodes
-tool_node1 = ToolNode(tool=tool1)
-tool_node2 = ToolNode(tool=tool2)
+# Define two independent nodes (e.g., wrapping different tools)
+def call_tool1(state): ...
+def call_tool2(state): ...
 
-# Build a graph with parallel branches
-graph = StateGraph()
-graph.add_node("tool1", tool_node1)
-graph.add_node("tool2", tool_node2)
-graph.add_edge("tool1", END)
-graph.add_edge("tool2", END)
-graph.set_entry_point(["tool1", "tool2"])  # Parallel entry
+# Build a graph with parallel branches: both nodes fan out from START
+# and run concurrently in the same superstep
+builder = StateGraph(State)
+builder.add_node("tool1", call_tool1)
+builder.add_node("tool2", call_tool2)
+builder.add_edge(START, "tool1")
+builder.add_edge(START, "tool2")
+builder.add_edge("tool1", END)
+builder.add_edge("tool2", END)
 
 # Run the graph
-result = graph.run(input_data)
+graph = builder.compile()
+result = graph.invoke(input_data)
 ```
 *This pattern ensures both tools are called in parallel, minimizing total latency.*
 
@@ -5455,25 +5541,28 @@ A production RAG system serving 10M+ queries/day used LangGraph with multi-layer
 
 **Code Example (Conceptual):**
 ```python
-import langgraph
+from langgraph.graph import StateGraph, START, END
 
 # Define nodes for each step in the workflow
-def retrieve_info(context):
+def retrieve_info(state):
     # Autonomous decision: what info to fetch
     ...
 
-def summarize(context):
+def summarize(state):
     # Autonomous summarization logic
     ...
 
 # Build the workflow graph
-graph = langgraph.Graph()
-graph.add_node("retrieve", retrieve_info)
-graph.add_node("summarize", summarize)
-graph.add_edge("retrieve", "summarize")
+builder = StateGraph(State)
+builder.add_node("retrieve", retrieve_info)
+builder.add_node("summarize", summarize)
+builder.add_edge(START, "retrieve")
+builder.add_edge("retrieve", "summarize")
+builder.add_edge("summarize", END)
 
 # Run the agentic workflow
-result = graph.run(start_node="retrieve", input_data=...)
+graph = builder.compile()
+result = graph.invoke(input_data)
 ```
 
 **Best Practices:**
@@ -5532,33 +5621,37 @@ LangGraph is a powerful open-source framework designed to enable complex decisio
 Here’s a simplified conceptual example (Python-like pseudocode):
 
 ```python
-import langgraph
+from langgraph.graph import StateGraph, START, END
 
 # Define nodes as functions or LLM calls
 def gather_info(state):
     # ... logic ...
-    return updated_state
+    return {"risk": computed_risk}
 
-def decide_action(state):
-    if state['risk'] > 0.5:
-        return 'escalate'
-    else:
-        return 'proceed'
+def proceed(state):
+    # ... logic ...
+    return {}
 
 def escalate(state):
     # ... logic ...
-    return updated_state
+    return {}
+
+# Routing function used by a conditional edge (the decision point)
+def decide_action(state):
+    return 'escalate' if state['risk'] > 0.5 else 'proceed'
 
 # Build the graph
-graph = langgraph.Graph()
-graph.add_node('gather_info', gather_info)
-graph.add_node('decide_action', decide_action)
-graph.add_node('escalate', escalate)
+builder = StateGraph(State)
+builder.add_node('gather_info', gather_info)
+builder.add_node('proceed', proceed)
+builder.add_node('escalate', escalate)
 
 # Define edges (decision points)
-graph.add_edge('gather_info', 'decide_action')
-graph.add_edge('decide_action', 'proceed', condition=lambda s: s['risk'] <= 0.5)
-graph.add_edge('decide_action', 'escalate', condition=lambda s: s['risk'] > 0.5)
+builder.add_edge(START, 'gather_info')
+builder.add_conditional_edges('gather_info', decide_action, ['proceed', 'escalate'])
+builder.add_edge('proceed', END)
+builder.add_edge('escalate', END)
+graph = builder.compile()
 ```
 
 ---
@@ -5982,29 +6075,33 @@ LangGraph’s roadmap is focused on making multi-agent AI systems more powerful,
 A simplified example of state sharing in LangGraph:
 
 ```python
-from langgraph import State, Node, Graph
+import operator
+from typing import Annotated
+from typing_extensions import TypedDict
+from langgraph.graph import StateGraph, START, END
 
 # Define the shared state structure
-class SharedState(State):
-    messages: list
-    results: dict
+# (reducers merge each agent's updates instead of overwriting)
+class SharedState(TypedDict):
+    messages: Annotated[list, operator.add]
+    results: Annotated[dict, operator.or_]
 
-# Define agent nodes
+# Define agent nodes (each returns a partial update; reducers merge them)
 def agent_a(state: SharedState):
-    state.messages.append("Agent A processed")
-    state.results['A'] = "Result from A"
-    return state
+    return {"messages": ["Agent A processed"], "results": {"A": "Result from A"}}
 
 def agent_b(state: SharedState):
-    state.messages.append("Agent B processed")
-    state.results['B'] = "Result from B"
-    return state
+    return {"messages": ["Agent B processed"], "results": {"B": "Result from B"}}
 
 # Build the graph
-graph = Graph(state=SharedState(messages=[], results={}))
-graph.add_node(Node(agent_a))
-graph.add_node(Node(agent_b))
-graph.run()
+builder = StateGraph(SharedState)
+builder.add_node("agent_a", agent_a)
+builder.add_node("agent_b", agent_b)
+builder.add_edge(START, "agent_a")
+builder.add_edge("agent_a", "agent_b")
+builder.add_edge("agent_b", END)
+graph = builder.compile()
+graph.invoke({"messages": [], "results": {}})
 ```
 
 In this example, both agents read and update the same `SharedState` object.
@@ -6088,13 +6185,13 @@ LangGraph manages state-sharing in multi-agent systems through a centralized, st
 
 *Static Graph Example:*
 ```python
-from langgraph import StateGraph
+from langgraph.graph import StateGraph, START
 
-graph = StateGraph()
-graph.add_node("step1", step1_function)
-graph.add_node("step2", step2_function)
-graph.add_edge("step1", "step2")
-graph.set_entry_point("step1")
+builder = StateGraph(State)
+builder.add_node("step1", step1_function)
+builder.add_node("step2", step2_function)
+builder.add_edge(START, "step1")
+builder.add_edge("step1", "step2")
 ```
 *This graph always runs step1, then step2.*
 
@@ -6106,9 +6203,7 @@ def dynamic_router(state):
     else:
         return "send_reply"
 
-graph.add_node("router", dynamic_router)
-graph.add_edge("router", "human_review")
-graph.add_edge("router", "send_reply")
+builder.add_conditional_edges("draft_reply", dynamic_router, ["human_review", "send_reply"])
 ```
 *Here, the next step is chosen at runtime based on the state.*
 
@@ -6179,23 +6274,23 @@ graph.add_edge("router", "send_reply")
 #### 4. **Example Integration Stack**
 ```python
 # Example: Integrating LangGraph with LangChain, OpenAI, and Pinecone
-pip install langgraph langchain openai pinecone-client fastapi
+# pip install langgraph langchain langchain-openai pinecone fastapi
 
 # In your LangGraph node logic:
-from langchain.llms import OpenAI
-from pinecone import PineconeClient
+from langchain_openai import ChatOpenAI
+from pinecone import Pinecone
+
+llm = ChatOpenAI(model="gpt-4o-mini")
+pc = Pinecone(api_key="...")
+index = pc.Index("my-index")
 
 def node_logic(state):
     # Use OpenAI for LLM tasks
-    llm = OpenAI(api_key="...")
-    response = llm("Summarize: " + state["input"])
+    summary = llm.invoke("Summarize: " + state["input"]).content
     # Use Pinecone for vector search
-    pc = PineconeClient(api_key="...")
-    results = pc.query(response)
-    # Update state
-    state["summary"] = response
-    state["search_results"] = results
-    return state
+    results = index.query(vector=embed(summary), top_k=5)
+    # Return a partial state update
+    return {"summary": summary, "search_results": results}
 ```
 
 ---
@@ -6256,17 +6351,14 @@ LangGraph’s graph logic can be combined with other AI frameworks by designing 
 **Code Example:**
 
 ```python
-import langgraph
-
 # Example node function with prompt engineering
 def summarize_node(state):
     prompt = f"Summarize the following text: {state['input_text']}"
-    response = llm(prompt)
-    state['summary'] = response
-    return state
+    response = llm.invoke(prompt)
+    return {"summary": response.content}
 
-# Adding node to LangGraph workflow
-graph.add_node("summarize", summarize_node)
+# Adding node to a LangGraph workflow
+builder.add_node("summarize", summarize_node)
 ```
 
 **Best Practices:**

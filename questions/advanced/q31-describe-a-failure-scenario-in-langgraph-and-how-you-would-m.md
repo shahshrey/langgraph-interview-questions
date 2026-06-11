@@ -20,23 +20,23 @@ LangGraph’s `ToolNode` automatically captures tool errors and reports them to 
 ```python
 from langgraph.prebuilt import ToolNode
 
-# ToolNode will catch and report tool errors
-tool_node = ToolNode(...)
+# ToolNode will catch tool errors and report them back to the model
+tool_node = ToolNode(tools, handle_tool_errors=True)
 ```
 
 **2. Multi-level Error Handling and State Management**  
-Implement multi-level error handling using error-handling nodes and rigorous state management. For example, use a `NodeErrorHandler` with retry and fallback strategies:
+Implement multi-level error handling using node-level retry policies and explicit error-handling/fallback nodes, with error metadata tracked in the graph state:
 
 ```python
-from langchain.error_handling import NodeErrorHandler
-from langgraph.state_management import GraphState
+from langgraph.types import RetryPolicy
 
-graph_state = GraphState(include_error_metadata=True)
-node_error_handler = NodeErrorHandler(
-    state=graph_state,
-    max_retries=3,
-    fallback_strategy='graceful_degradation'
+builder.add_node(
+    "call_tool",
+    call_tool_fn,
+    retry_policy=RetryPolicy(max_attempts=3),  # retry transient failures
 )
+# Route persistent failures to a fallback node instead of crashing the run
+builder.add_conditional_edges("call_tool", route_on_error, ["fallback", "next_step"])
 ```
 
 **3. Improve Tool Schemas and Descriptions**  

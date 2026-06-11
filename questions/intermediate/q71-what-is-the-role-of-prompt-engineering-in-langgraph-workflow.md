@@ -17,17 +17,17 @@
 **Code Example:**
 
 ```python
-import langgraph
+from langgraph.graph import StateGraph
 
 # Example node function with prompt engineering
-def summarize_node(state):
+def summarize_node(state: State):
     prompt = f"Summarize the following text: {state['input_text']}"
-    response = llm(prompt)
-    state['summary'] = response
-    return state
+    response = llm.invoke(prompt)
+    return {"summary": response.content}  # return a partial state update
 
-# Adding node to LangGraph workflow
-graph.add_node("summarize", summarize_node)
+# Adding node to the LangGraph workflow
+builder = StateGraph(State)
+builder.add_node("summarize", summarize_node)
 ```
 
 **Best Practices:**
