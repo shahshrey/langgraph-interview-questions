@@ -9,7 +9,7 @@
 ### **Key Concepts**
 
 - **ReAct Pattern**: Stands for "Reasoning and Acting." It is an agent design pattern where an AI system alternates between reasoning (thinking about the next step) and acting (executing a tool or function), often in a loop, to solve complex tasks.
-- **LangGraph**: A framework built on top of LangChain that lets you define agent workflows as graphs, where nodes represent steps (reasoning or action) and edges define the flow between them.
+- **LangGraph**: A framework from the LangChain ecosystem that lets you define agent workflows as graphs, where nodes represent steps (reasoning or action) and edges define the flow between them.
 
 ---
 

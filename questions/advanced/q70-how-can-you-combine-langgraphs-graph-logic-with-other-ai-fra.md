@@ -8,7 +8,7 @@
 
 ### Key Concepts
 
-- **LangGraph** is a graph-based orchestration framework built on top of LangChain, designed for modeling complex, multi-agent, and cyclical workflows.
+- **LangGraph** is a graph-based orchestration framework from the LangChain ecosystem, designed for modeling complex, multi-agent, and cyclical workflows.
 - **Hybrid agents** combine reactive (fast, event-driven) and deliberative (planning, reasoning) behaviors, often requiring integration of multiple AI frameworks and tools.
 - **Integration** with other frameworks (e.g., LangChain, OpenAI API, Pinecone, CrewAI, n8n) enables hybrid agents to leverage the strengths of each system.
 

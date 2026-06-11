@@ -4,7 +4,7 @@
 
 **Difficulty:** easy | **Tags:** basics, comparison
 
-**LangGraph** is a framework built on top of LangChain, designed to simplify the creation of complex, stateful, and often non-linear AI workflows. While both are part of the LangChain ecosystem and help developers build applications powered by large language models (LLMs), they serve different purposes and have distinct approaches.
+**LangGraph** is a low-level orchestration framework from the LangChain ecosystem, designed to simplify the creation of complex, stateful, and often non-linear AI workflows. It integrates seamlessly with LangChain components (and in fact LangChain 1.x's `create_agent` is built on top of LangGraph), but it can also be used standalone. While both help developers build applications powered by large language models (LLMs), they serve different purposes and have distinct approaches.
 
 ---
 
@@ -17,7 +17,7 @@
   - Passes information between steps but does not inherently maintain persistent state across runs.
 
 - **LangGraph**:
-  - Built as a specialized extension of LangChain, introducing a graph-based (state machine) architecture.
+  - A graph-based (state machine) orchestration runtime that works hand-in-hand with LangChain components.
   - Designed for stateful, complex, and non-linear workflows, such as multi-agent systems or applications with branching, loops, and retries.
   - Each node in the graph represents an action (e.g., LLM call, database query), and edges define transitions based on outcomes.
   - Robust state management is a core feature, allowing nodes to access and modify shared state for context-aware behaviors.
@@ -767,7 +767,7 @@ This process gives you a robust foundation for building simple (and extensible) 
 **Key Concepts:**
 
 - **Agentic Research** in LangGraph refers to the use of autonomous, goal-driven AI agents that can perform complex, multi-step research tasks by orchestrating workflows represented as graphs.
-- **LangGraph** is a framework (built on top of LangChain) that enables the creation of agentic AI systems using directed graphs, where nodes represent processing steps (such as searching, summarizing, or decision-making) and edges define transitions, including branching and looping for non-linear workflows.
+- **LangGraph** is a framework (from the LangChain ecosystem) that enables the creation of agentic AI systems using directed graphs, where nodes represent processing steps (such as searching, summarizing, or decision-making) and edges define transitions, including branching and looping for non-linear workflows.
 
 ---
 
@@ -937,7 +937,7 @@ To integrate external tools in LangGraph, define your tool, bind it to a node (o
 #### **Key Concepts & Architectural Differences**
 
 - **LangChain** is a modular framework for building LLM-powered applications, focusing on chaining together components (like prompt templates, memory, tools, and agents) in a linear or slightly branched fashion. It excels at rapid prototyping, simple to moderately complex workflows, and has a large ecosystem and community support.
-- **LangGraph** is built on top of LangChain, introducing a graph-based architecture. It is designed for complex, stateful, and dynamic workflows, especially those involving multi-agent coordination, branching, looping, and explicit state management. LangGraph is ideal for production-grade, adaptive AI systems.
+- **LangGraph** is a standalone orchestration runtime from the LangChain ecosystem, introducing a graph-based architecture (LangChain 1.x's `create_agent` is itself built on LangGraph). It is designed for complex, stateful, and dynamic workflows, especially those involving multi-agent coordination, branching, looping, and explicit state management. LangGraph is ideal for production-grade, adaptive AI systems.
 
 ---
 
@@ -1645,7 +1645,7 @@ Reactive agents in LangGraph are best for quick, stateless responses, while plan
 ### **Key Concepts**
 
 - **ReAct Pattern**: Stands for "Reasoning and Acting." It is an agent design pattern where an AI system alternates between reasoning (thinking about the next step) and acting (executing a tool or function), often in a loop, to solve complex tasks.
-- **LangGraph**: A framework built on top of LangChain that lets you define agent workflows as graphs, where nodes represent steps (reasoning or action) and edges define the flow between them.
+- **LangGraph**: A framework from the LangChain ecosystem that lets you define agent workflows as graphs, where nodes represent steps (reasoning or action) and edges define the flow between them.
 
 ---
 
@@ -6243,7 +6243,7 @@ builder.add_conditional_edges("draft_reply", dynamic_router, ["human_review", "s
 
 ### Key Concepts
 
-- **LangGraph** is a graph-based orchestration framework built on top of LangChain, designed for modeling complex, multi-agent, and cyclical workflows.
+- **LangGraph** is a graph-based orchestration framework from the LangChain ecosystem, designed for modeling complex, multi-agent, and cyclical workflows.
 - **Hybrid agents** combine reactive (fast, event-driven) and deliberative (planning, reasoning) behaviors, often requiring integration of multiple AI frameworks and tools.
 - **Integration** with other frameworks (e.g., LangChain, OpenAI API, Pinecone, CrewAI, n8n) enables hybrid agents to leverage the strengths of each system.
 

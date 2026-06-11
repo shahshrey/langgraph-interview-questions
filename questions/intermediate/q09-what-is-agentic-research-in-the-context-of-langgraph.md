@@ -7,7 +7,7 @@
 **Key Concepts:**
 
 - **Agentic Research** in LangGraph refers to the use of autonomous, goal-driven AI agents that can perform complex, multi-step research tasks by orchestrating workflows represented as graphs.
-- **LangGraph** is a framework (built on top of LangChain) that enables the creation of agentic AI systems using directed graphs, where nodes represent processing steps (such as searching, summarizing, or decision-making) and edges define transitions, including branching and looping for non-linear workflows.
+- **LangGraph** is a framework (from the LangChain ecosystem) that enables the creation of agentic AI systems using directed graphs, where nodes represent processing steps (such as searching, summarizing, or decision-making) and edges define transitions, including branching and looping for non-linear workflows.
 
 ---
 
